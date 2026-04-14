@@ -14,36 +14,31 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
-      # id-token: write
+      id-token: write
     steps:
 
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # - name: Verify required permissions
-      #   uses: ./.github/actions/verify-permissions
-
       - name: UDS CLI Setup
         uses: ./.github/actions/uds-cli-setup
 
-      - name: Install Ruff
-        run: pip install ruff==0.15.1
-
-      - name: Witness Run Ruff
+      # Lint logic is owned by the calling repo via a UDS task.
+      # Define a 'lint' task in your tasks.yaml that runs your linter(s).
+      - name: Witness Run Lint
         uses: testifysec/witness-run-action@7aa15e327829f1f2a523365c564c948d5dde69dd # v0.3.3
         with:
-          step: ruff
+          step: lint
           enable-archivista: false
           enable-sigstore: true
-          command: ruff check app/
-          outfile: ruff-witness.json
+          command: uds run lint
+          outfile: lint-witness.json
 
       - name: Upload lint artifacts
         uses: actions/upload-artifact@v4
         with:
           name: lint-artifacts
-          path: ruff-witness.json
+          path: lint-witness.json
 
   security-scan:
     needs: lint
@@ -68,7 +63,7 @@ jobs:
       - name: Security Scan and Vouch
         uses: ./.github/actions/security-scan
         with:
-          external-attestations: "ruff-witness.json"
+          external-attestations: "lint-witness.json"
           olm-catalog: cat-api.uds-mil.us
           olm-org: uds-army-demo
           olm-user-id: ${{ secrets.OLM_USER_ID }}
