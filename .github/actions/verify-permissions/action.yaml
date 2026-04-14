@@ -1,0 +1,26 @@
+name: Verify Permissions
+description: "Fails fast with a clear error if the calling job does not have id-token:write permission required for Sigstore signing."
+
+runs:
+  using: composite
+  steps:
+    - name: Verify id-token:write permission
+      shell: bash
+      run: |
+        echo "Requesting OIDC token to verify id-token:write permission..."
+        TOKEN=$(curl -sf \
+          -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+          "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sigstore" \
+          | jq -r '.value')
+
+        if [[ -z "$TOKEN" || "$TOKEN" == "null" ]]; then
+          echo "::error::This action requires 'id-token: write' permission on the calling job."
+          echo "::error::Add the following to your job definition:"
+          echo "::error::  permissions:"
+          echo "::error::    id-token: write"
+          echo "::error::    contents: read"
+          echo "::error::    packages: write"
+          exit 1
+        fi
+
+        echo "Permission check passed."

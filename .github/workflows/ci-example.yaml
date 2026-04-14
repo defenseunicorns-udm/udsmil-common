@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      # id-token: write
+    steps:
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # - name: Verify required permissions
+      #   uses: ./.github/actions/verify-permissions
+
+      - name: UDS CLI Setup
+        uses: ./.github/actions/uds-cli-setup
+
+      - name: Install Ruff
+        run: pip install ruff==0.15.1
+
+      - name: Witness Run Ruff
+        uses: testifysec/witness-run-action@7aa15e327829f1f2a523365c564c948d5dde69dd # v0.3.3
+        with:
+          step: ruff
+          enable-archivista: false
+          enable-sigstore: true
+          command: ruff check app/
+          outfile: ruff-witness.json
+
+      - name: Upload lint artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-artifacts
+          path: ruff-witness.json
+
+  security-scan:
+    needs: lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: UDS CLI Setup
+        uses: ./.github/actions/uds-cli-setup
+
+      - name: Download lint artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: lint-artifacts
+          path: .
+
+      - name: Security Scan and Vouch
+        uses: ./.github/actions/security-scan
+        with:
+          external-attestations: "ruff-witness.json"
+          olm-catalog: cat-api.uds-mil.us
+          olm-org: uds-army-demo
+          olm-user-id: ${{ secrets.OLM_USER_ID }}
+          olm-password: ${{ secrets.OLM_PASSWORD }}
+
+  publish:
+    needs: security-scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: UDS CLI Setup
+        uses: ./.github/actions/uds-cli-setup
+
+      - name: Publish
+        uses: ./.github/actions/publish
+        with:
+          registry: registry.uds-mil.us
+          registry-org: uds-army-demo
+          registry-user-id: ${{ secrets.DEMO_ORG_USER_ID }}
+          registry-password: ${{ secrets.DEMO_ORG_PASSWORD }}

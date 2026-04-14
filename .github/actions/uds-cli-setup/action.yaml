@@ -1,0 +1,21 @@
+name: UDS CLI Setup
+description: Install UDS CLI
+
+inputs:
+  version:
+    description: Version of UDS CLI to install
+    # renovate: datasource=github-releases depName=defenseunicorns/uds-cli
+    default: v0.27.14
+
+runs:
+  using: composite
+  steps:
+    - name: Install UDS CLI
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+      run: |
+        # renovate: ignore
+        curl --retry-all-errors --retry 5 -L https://github.com/defenseunicorns/uds-cli/releases/download/${VERSION}/uds-cli_${VERSION}_Linux_amd64 -o uds
+        chmod +x uds
+        sudo mv uds /usr/local/bin/

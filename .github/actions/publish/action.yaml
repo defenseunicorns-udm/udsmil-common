@@ -1,0 +1,36 @@
+name: Publish Zarf Package
+description: "Publishes a vouched Zarf package to an OCI registry."
+
+inputs:
+  registry:
+    description: "OCI registry to publish to (e.g. registry.uds-mil.us)"
+    required: true
+  registry-org:
+    description: "Organization path within the registry (e.g. uds-army-demo)"
+    required: true
+  registry-user-id:
+    description: "Registry username for publishing"
+    required: true
+  registry-password:
+    description: "Registry password for publishing"
+    required: true
+
+runs:
+  using: composite
+  steps:
+
+    - name: Download Zarf package artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: zarf-package
+        path: .
+
+    - name: Publish Zarf Package
+      shell: bash
+      run: |
+        uds zarf tools registry login \
+          -u ${{ inputs.registry-user-id }} \
+          -p ${{ inputs.registry-password }} \
+          ${{ inputs.registry }}
+        uds zarf package publish zarf-package-*.tar.zst \
+          oci://${{ inputs.registry }}/${{ inputs.registry-org }}

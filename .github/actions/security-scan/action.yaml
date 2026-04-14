@@ -1,0 +1,172 @@
+name: Security Scan
+description: "Runs Gitleaks secrets scanning, optionally OpenGrep SAST, builds and vouches for a Zarf package."
+
+inputs:
+  external-attestations:
+    description: "Comma-separated list of witness JSON attestation files produced by the caller (e.g. 'lint-witness.json,test-witness.json')"
+    required: false
+    default: ""
+  external-sarif-files:
+    description: "Comma-separated list of SARIF files produced by the caller (e.g. 'lint.sarif.json')"
+    required: false
+    default: ""
+  run-opengrep:
+    description: "Whether to run OpenGrep SAST scanning. Disable if source is not available or a different SAST tool is used."
+    required: false
+    default: "true"
+  opengrep-version:
+    description: "Version of OpenGrep to install"
+    required: false
+    default: "v1.15.1"
+  gitleaks-version:
+    description: "Version of Gitleaks to install"
+    required: false
+    default: "8.30.0"
+  olm-catalog:
+    description: "OLM catalog hostname"
+    required: true
+  olm-org:
+    description: "OLM organization name"
+    required: true
+  olm-user-id:
+    description: "OLM registry username"
+    required: true
+  olm-password:
+    description: "OLM registry password"
+    required: true
+  zarf-architecture:
+    description: "Target architecture for the Zarf package"
+    required: false
+    default: "amd64"
+  zarf-flavor:
+    description: "Flavor for the Zarf package build"
+    required: false
+    default: "upstream"
+  test-directory:
+    description: "Path to the test directory to pass to olm vouch. Leave empty to skip the --test-directory flag entirely."
+    required: false
+    default: "tests"
+
+outputs:
+  zarf-package:
+    description: "Filename of the built Zarf package"
+    value: ${{ steps.find-package.outputs.zarf-package }}
+
+runs:
+  using: composite
+  steps:
+
+    - name: Install Cosign
+      uses: sigstore/cosign-installer@v4.0.0
+
+    - name: OLM CLI Setup
+      uses: ./.github/actions/olm-cli-setup
+      with:
+        username: ${{ inputs.olm-user-id }}
+        password: ${{ inputs.olm-password }}
+
+    - name: Install OpenGrep
+      if: ${{ inputs.run-opengrep == 'true' }}
+      shell: bash
+      run: |
+        curl -fSL -o opengrep https://github.com/opengrep/opengrep/releases/download/${{ inputs.opengrep-version }}/opengrep_manylinux_x86
+        chmod +x opengrep
+        mkdir -p $HOME/.local/bin
+        mv opengrep $HOME/.local/bin
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+    - name: Install Gitleaks
+      shell: bash
+      run: |
+        curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v${{ inputs.gitleaks-version }}/gitleaks_${{ inputs.gitleaks-version }}_linux_x64.tar.gz -o gitleaks.tar.gz
+        tar -zxf gitleaks.tar.gz
+        mkdir -p $HOME/.local/bin
+        mv gitleaks $HOME/.local/bin
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        rm gitleaks.tar.gz
+
+    - name: Witness Run OpenGrep
+      if: ${{ inputs.run-opengrep == 'true' }}
+      uses: testifysec/witness-run-action@7aa15e327829f1f2a523365c564c948d5dde69dd # v0.3.3
+      with:
+        step: opengrep
+        enable-archivista: false
+        enable-sigstore: true
+        command: opengrep scan --sarif --sarif-output opengrep.sarif.json
+        outfile: opengrep-witness.json
+
+    - name: Witness Run Gitleaks
+      uses: testifysec/witness-run-action@7aa15e327829f1f2a523365c564c948d5dde69dd # v0.3.3
+      with:
+        step: gitleaks
+        enable-archivista: false
+        enable-sigstore: true
+        command: gitleaks dir . --report-format sarif --report-path gitleaks.sarif.json
+        outfile: gitleaks-witness.json
+
+    - name: Witness Build Zarf Package
+      uses: testifysec/witness-run-action@7aa15e327829f1f2a523365c564c948d5dde69dd # v0.3.3
+      with:
+        step: zarf-create
+        enable-archivista: false
+        enable-sigstore: true
+        command: uds zarf package create . --confirm --no-progress --architecture="${{ inputs.zarf-architecture }}" --flavor "${{ inputs.zarf-flavor }}"
+        outfile: zarf-create-witness.json
+
+    - name: Resolve vouch inputs
+      id: resolve-vouch
+      shell: bash
+      run: |
+        ATTESTATIONS="zarf-create-witness.json,gitleaks-witness.json"
+
+        if [[ "${{ inputs.run-opengrep }}" == "true" ]]; then
+          ATTESTATIONS="${ATTESTATIONS},opengrep-witness.json"
+        fi
+
+        if [[ -n "${{ inputs.external-attestations }}" ]]; then
+          ATTESTATIONS="${ATTESTATIONS},${{ inputs.external-attestations }}"
+        fi
+
+        SARIF_FILES="gitleaks.sarif.json"
+
+        if [[ "${{ inputs.run-opengrep }}" == "true" ]]; then
+          SARIF_FILES="${SARIF_FILES},opengrep.sarif.json"
+        fi
+
+        if [[ -n "${{ inputs.external-sarif-files }}" ]]; then
+          SARIF_FILES="${SARIF_FILES},${{ inputs.external-sarif-files }}"
+        fi
+
+        echo "attestations=${ATTESTATIONS}" >> "$GITHUB_OUTPUT"
+        echo "sarif-files=${SARIF_FILES}" >> "$GITHUB_OUTPUT"
+
+    - name: Vouch for Zarf Package
+      shell: bash
+      env:
+        OLM_CAT: ${{ inputs.olm-catalog }}
+        OLM_ORG: ${{ inputs.olm-org }}
+      run: |
+        TEST_DIR_FLAG=""
+        if [[ -n "${{ inputs.test-directory }}" && -d "${{ inputs.test-directory }}" ]]; then
+          TEST_DIR_FLAG="--test-directory ${{ inputs.test-directory }}"
+        fi
+
+        ./olm vouch zarf-package-*.tar.zst \
+          --sarif-evidence ${{ steps.resolve-vouch.outputs.sarif-files }} \
+          --log-level debug \
+          $TEST_DIR_FLAG \
+          --attestations ${{ steps.resolve-vouch.outputs.attestations }}
+
+    # Capture the package filename so the publish action doesn't need to glob
+    - name: Find Zarf package
+      id: find-package
+      shell: bash
+      run: |
+        PACKAGE=$(ls zarf-package-*.tar.zst | head -n 1)
+        echo "zarf-package=${PACKAGE}" >> "$GITHUB_OUTPUT"
+
+    - name: Upload Zarf package artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: zarf-package
+        path: zarf-package-*.tar.zst
