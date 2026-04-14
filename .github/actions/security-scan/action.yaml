@@ -11,13 +11,17 @@ inputs:
     required: false
     default: ""
   run-opengrep:
-    description: "Whether to run OpenGrep SAST scanning. Disable if source is not available or a different SAST tool is used."
+    description: "Whether to run OpenGrep SAST scanning. Set to 'false' to skip entirely, e.g. when using a different SAST tool and passing its output via external-attestations."
     required: false
     default: "true"
   opengrep-version:
     description: "Version of OpenGrep to install"
     required: false
     default: "v1.15.1"
+  opengrep-scan-path:
+    description: "Path to scan with OpenGrep. Useful in monorepos to scope SAST to a specific service directory (e.g. 'services/api')."
+    required: false
+    default: "."
   gitleaks-version:
     description: "Version of Gitleaks to install"
     required: false
@@ -100,7 +104,7 @@ runs:
         step: opengrep
         enable-archivista: false
         enable-sigstore: true
-        command: opengrep scan --sarif --sarif-output opengrep.sarif.json
+        command: opengrep scan ${{ inputs.opengrep-scan-path }} --sarif --sarif-output opengrep.sarif.json
         outfile: opengrep-witness.json
 
     - name: Witness Run Gitleaks
@@ -111,6 +115,9 @@ runs:
         enable-sigstore: true
         command: gitleaks dir . --report-format sarif --report-path gitleaks.sarif.json
         outfile: gitleaks-witness.json
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
 
     - name: Witness Build Zarf Package
       uses: testifysec/witness-run-action@7aa15e327829f1f2a523365c564c948d5dde69dd # v0.3.3
@@ -148,6 +155,14 @@ runs:
         echo "attestations=${ATTESTATIONS}" >> "$GITHUB_OUTPUT"
         echo "sarif-files=${SARIF_FILES}" >> "$GITHUB_OUTPUT"
 
+    # Capture the exact package filename before vouching to avoid glob matching multiple files
+    - name: Find Zarf package
+      id: find-package
+      shell: bash
+      run: |
+        PACKAGE=$(ls zarf-package-*.tar.zst | head -n 1)
+        echo "zarf-package=${PACKAGE}" >> "$GITHUB_OUTPUT"
+
     - name: Vouch for Zarf Package
       shell: bash
       env:
@@ -159,19 +174,11 @@ runs:
           TEST_DIR_FLAG="--test-directory ${{ inputs.test-directory }}"
         fi
 
-        ./olm vouch zarf-package-*.tar.zst \
+        ./olm vouch ${{ steps.find-package.outputs.zarf-package }} \
           --sarif-evidence ${{ steps.resolve-vouch.outputs.sarif-files }} \
           --log-level debug \
           $TEST_DIR_FLAG \
           --attestations ${{ steps.resolve-vouch.outputs.attestations }}
-
-    # Capture the package filename so the publish action doesn't need to glob
-    - name: Find Zarf package
-      id: find-package
-      shell: bash
-      run: |
-        PACKAGE=$(ls zarf-package-*.tar.zst | head -n 1)
-        echo "zarf-package=${PACKAGE}" >> "$GITHUB_OUTPUT"
 
     - name: Upload Zarf package artifact
       uses: actions/upload-artifact@v4
