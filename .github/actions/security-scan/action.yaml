@@ -42,6 +42,14 @@ inputs:
     description: "Flavor for the Zarf package build"
     required: false
     default: "upstream"
+  zarf-path:
+    description: "Path to the directory containing zarf.yaml. Use a subdirectory path for monorepos (e.g. 'services/api')."
+    required: false
+    default: "."
+  artifact-name:
+    description: "Name for the uploaded Zarf package artifact. Use unique names when building multiple packages in a matrix."
+    required: false
+    default: "zarf-package"
   test-directory:
     description: "Path to the test directory to pass to olm vouch. Leave empty to skip the --test-directory flag entirely."
     required: false
@@ -110,7 +118,7 @@ runs:
         step: zarf-create
         enable-archivista: false
         enable-sigstore: true
-        command: uds zarf package create . --confirm --no-progress --architecture="${{ inputs.zarf-architecture }}" --flavor "${{ inputs.zarf-flavor }}"
+        command: uds zarf package create ${{ inputs.zarf-path }} --confirm --no-progress --architecture="${{ inputs.zarf-architecture }}" --flavor "${{ inputs.zarf-flavor }}"
         outfile: zarf-create-witness.json
 
     - name: Resolve vouch inputs
@@ -168,5 +176,5 @@ runs:
     - name: Upload Zarf package artifact
       uses: actions/upload-artifact@v4
       with:
-        name: zarf-package
+        name: ${{ inputs.artifact-name }}
         path: zarf-package-*.tar.zst

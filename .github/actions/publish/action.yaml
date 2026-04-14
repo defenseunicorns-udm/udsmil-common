@@ -14,6 +14,10 @@ inputs:
   registry-password:
     description: "Registry password for publishing"
     required: true
+  artifact-name:
+    description: "Name of the Zarf package artifact to download. Must match the artifact-name used in the security-scan action."
+    required: false
+    default: "zarf-package"
 
 runs:
   using: composite
@@ -22,7 +26,7 @@ runs:
     - name: Download Zarf package artifact
       uses: actions/download-artifact@v4
       with:
-        name: zarf-package
+        name: ${{ inputs.artifact-name }}
         path: .
 
     - name: Publish Zarf Package
