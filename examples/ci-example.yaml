@@ -19,6 +19,7 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@v6.0.2
+      # TODO: Update pinned shas once scan/vouch actions are merged.
 
       - name: UDS CLI Setup
         uses: defenseunicorns-udm/udsmil-common/.github/actions/uds-cli-setup@609a8ab12a0c5d82271c84591476ff14e4653df3
@@ -40,7 +41,7 @@ jobs:
           name: lint-artifacts
           path: lint-witness.json
 
-  security-scan:
+  scan-and-vouch:
     needs: lint
     runs-on: ubuntu-latest
     permissions:
@@ -60,17 +61,22 @@ jobs:
           name: lint-artifacts
           path: .
 
-      - name: Security Scan and Vouch
+      - name: Security Scan
+        id: scan
         uses: defenseunicorns-udm/udsmil-common/.github/actions/security-scan@609a8ab12a0c5d82271c84591476ff14e4653df3
+
+      - name: Vouch
+        uses: defenseunicorns-udm/udsmil-common/.github/actions/vouch@609a8ab12a0c5d82271c84591476ff14e4653df3
         with:
-          external-attestations: "lint-witness.json"
+          attestations: "${{ steps.scan.outputs.witness-files }},lint-witness.json"
+          sarif-files: "${{ steps.scan.outputs.sarif-files }}"
           olm-catalog: cat-api.uds-mil.us
           olm-org: uds-army-demo
           olm-user-id: ${{ secrets.OLM_USER_ID }}
           olm-password: ${{ secrets.OLM_PASSWORD }}
 
   publish:
-    needs: security-scan
+    needs: scan-and-vouch
     runs-on: ubuntu-latest
     permissions:
       contents: read

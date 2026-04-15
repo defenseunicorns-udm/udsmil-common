@@ -10,7 +10,8 @@ publishes Zarf packages to the UDS MIL registry.
 |--------|-------------|
 | [`uds-cli-setup`](.github/actions/uds-cli-setup/action.yaml) | Installs the UDS CLI |
 | [`olm-cli-setup`](.github/actions/olm-cli-setup/action.yaml) | Authenticates with the UDS registry and installs the OLM CLI |
-| [`security-scan`](.github/actions/security-scan/action.yaml) | Runs Gitleaks + OpenGrep, builds and vouches a Zarf package |
+| [`security-scan`](.github/actions/security-scan/action.yaml) | Runs Gitleaks secrets scanning and OpenGrep SAST; outputs witness JSON and SARIF file lists |
+| [`vouch`](.github/actions/vouch/action.yaml) | Builds a Zarf package with Witness attestation and vouches for it via OLM |
 | [`publish`](.github/actions/publish/action.yaml) | Publishes a vouched Zarf package to the UDS registry |
 | [`verify-permissions`](.github/actions/verify-permissions/action.yaml) | Validates required GitHub Actions OIDC permissions are present |
 
@@ -25,6 +26,7 @@ uses: defenseunicorns-udm/udsmil-common/.github/actions/security-scan@609a8ab12a
 ### Minimal CI workflow
 
 ```yaml
+# TODO: Update pinned shas once scan/vouch actions are merged.
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -46,7 +48,7 @@ jobs:
           name: lint-artifacts
           path: lint-witness.json
 
-  security-scan:
+  scan-and-vouch:
     needs: lint
     runs-on: ubuntu-latest
     permissions:
@@ -56,20 +58,23 @@ jobs:
     steps:
         uses: actions/checkout@v6.0.2
       - uses: defenseunicorns-udm/udsmil-common/.github/actions/uds-cli-setup@609a8ab12a0c5d82271c84591476ff14e4653df3
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8.0.1
         with:
           name: lint-artifacts
           path: .
-      - uses: defenseunicorns-udm/udsmil-common/.github/actions/security-scan@609a8ab12a0c5d82271c84591476ff14e4653df3
+      - id: scan
+        uses: defenseunicorns-udm/udsmil-common/.github/actions/security-scan@609a8ab12a0c5d82271c84591476ff14e4653df3
+      - uses: defenseunicorns-udm/udsmil-common/.github/actions/vouch@609a8ab12a0c5d82271c84591476ff14e4653df3
         with:
-          external-attestations: "lint-witness.json"
+          attestations: "${{ steps.scan.outputs.witness-files }},lint-witness.json"
+          sarif-files: "${{ steps.scan.outputs.sarif-files }}"
           olm-catalog: cat-api.uds-mil.us
           olm-org: <your-org-name>
           olm-user-id: ${{ secrets.OLM_USER_ID }}
           olm-password: ${{ secrets.OLM_PASSWORD }}
 
   publish:
-    needs: security-scan
+    needs: scan-and-vouch
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -90,15 +95,20 @@ Use `zarf-path` and `artifact-name` to build multiple services in a matrix:
 
 ```yaml
 jobs:
-  security-scan:
+  scan-and-vouch:
     strategy:
       matrix:
         service: [api, worker, frontend]
     steps:
-      - uses: defenseunicorns-udm/udsmil-common/.github/actions/security-scan@609a8ab12a0c5d82271c84591476ff14e4653df3
+      - id: scan
+        uses: defenseunicorns-udm/udsmil-common/.github/actions/security-scan@609a8ab12a0c5d82271c84591476ff14e4653df3
         with:
-          zarf-path: services/${{ matrix.service }}
           opengrep-scan-path: services/${{ matrix.service }}
+      - uses: defenseunicorns-udm/udsmil-common/.github/actions/vouch@609a8ab12a0c5d82271c84591476ff14e4653df3
+        with:
+          attestations: "${{ steps.scan.outputs.witness-files }}"
+          sarif-files: "${{ steps.scan.outputs.sarif-files }}"
+          zarf-path: services/${{ matrix.service }}
           artifact-name: zarf-package-${{ matrix.service }}
           olm-catalog: cat-api.uds-mil.us
           olm-org: <your-org-name>
@@ -110,14 +120,14 @@ jobs:
 
 | Secret | Used By | Description |
 |--------|---------|-------------|
-| `OLM_USER_ID` | `security-scan` | Username for OLM catalog authentication |
-| `OLM_PASSWORD` | `security-scan` | Password for OLM catalog authentication |
+| `OLM_USER_ID` | `vouch` | Username for OLM catalog authentication |
+| `OLM_PASSWORD` | `vouch` | Password for OLM catalog authentication |
 | `REGISTRY_USER_ID` | `publish` | Username for publishing to `registry.uds-mil.us` |
 | `REGISTRY_PASSWORD` | `publish` | Password for publishing to `registry.uds-mil.us` |
 
 ## Lint Task
 
-The `security-scan` workflow calls `uds run lint` — you must define a `lint`
+The example CI workflow calls `uds run lint` — you must define a `lint`
 task in your repo's `tasks.yaml`. See [`examples/tasks.yaml`](examples/tasks.yaml)
 for patterns covering Python, Go, TypeScript, and monorepos.
 
