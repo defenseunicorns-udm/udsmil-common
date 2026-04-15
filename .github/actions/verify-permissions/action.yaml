@@ -1,5 +1,5 @@
 name: Verify Permissions
-description: "Fails fast with a clear error if the calling job does not have id-token:write permission required for Sigstore signing."
+description: Fails fast with a clear error if the calling job does not have id-token:write permission required for Sigstore signing.
 
 runs:
   using: composite

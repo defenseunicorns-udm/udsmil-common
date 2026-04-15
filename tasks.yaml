@@ -1,6 +1,6 @@
 tasks:
 
   - name: lint
-    description: "Lint YAML files in .github/, src/, and values/ with yamllint"
+    description: Lint YAML files in .github/, src/, and values/ with yamllint
     actions:
       - cmd: pip install --quiet yamllint && yamllint .github/ src/ values/

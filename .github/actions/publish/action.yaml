@@ -1,23 +1,23 @@
 name: Publish Zarf Package
-description: "Publishes a vouched Zarf package to an OCI registry."
+description: Publishes a vouched Zarf package to an OCI registry.
 
 inputs:
   registry:
-    description: "OCI registry to publish to (e.g. registry.uds-mil.us)"
+    description: OCI registry to publish to (e.g. registry.uds-mil.us)
     required: true
   registry-org:
-    description: "Organization path within the registry (e.g. uds-army-demo)"
+    description: Organization path within the registry (e.g. uds-army-demo)
     required: true
   registry-user-id:
-    description: "Registry username for publishing"
+    description: Registry username for publishing
     required: true
   registry-password:
-    description: "Registry password for publishing"
+    description: Registry password for publishing
     required: true
   artifact-name:
-    description: "Name of the Zarf package artifact to download. Must match the artifact-name used in the security-scan action."
+    description: Name of the Zarf package artifact to download. Must match the artifact-name used in the security-scan action.
     required: false
-    default: "zarf-package"
+    default: zarf-package
 
 runs:
   using: composite

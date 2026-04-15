@@ -68,8 +68,8 @@ jobs:
       - name: Vouch
         uses: defenseunicorns-udm/udsmil-common/.github/actions/vouch@609a8ab12a0c5d82271c84591476ff14e4653df3
         with:
-          attestations: "${{ steps.scan.outputs.witness-files }},lint-witness.json"
-          sarif-files: "${{ steps.scan.outputs.sarif-files }}"
+          attestations: ${{ steps.scan.outputs.witness-files }},lint-witness.json
+          sarif-files: ${{ steps.scan.outputs.sarif-files }}
           olm-catalog: cat-api.uds-mil.us
           olm-org: uds-army-demo
           olm-user-id: ${{ secrets.OLM_USER_ID }}

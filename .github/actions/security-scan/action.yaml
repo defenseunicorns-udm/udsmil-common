@@ -1,30 +1,30 @@
 name: Security Scan
-description: "Runs Gitleaks secrets scanning and optionally OpenGrep SAST. Outputs witness JSON and SARIF file lists for passing to the vouch action."
+description: Runs Gitleaks secrets scanning and optionally OpenGrep SAST. Outputs witness JSON and SARIF file lists for passing to the vouch action.
 
 inputs:
   run-opengrep:
-    description: "Whether to run OpenGrep SAST scanning. Set to 'false' to skip entirely, e.g. when using a different SAST tool and passing its output via external attestations."
+    description: Whether to run OpenGrep SAST scanning. Set to 'false' to skip entirely, e.g. when using a different SAST tool and passing its output via external attestations.
     required: false
-    default: "true"
+    default: true
   opengrep-version:
-    description: "Version of OpenGrep to install"
+    description: Version of OpenGrep to install
     required: false
-    default: "v1.15.1"
+    default: v1.15.1
   opengrep-scan-path:
-    description: "Path to scan with OpenGrep. Useful in monorepos to scope SAST to a specific service directory (e.g. 'services/api')."
+    description: Path to scan with OpenGrep. Useful in monorepos to scope SAST to a specific service directory (e.g. 'services/api').
     required: false
-    default: "."
+    default: .
   gitleaks-version:
-    description: "Version of Gitleaks to install"
+    description: Version of Gitleaks to install
     required: false
-    default: "8.30.0"
+    default: 8.30.0
 
 outputs:
   witness-files:
-    description: "Comma-separated list of witness JSON attestation files produced by this action"
+    description: Comma-separated list of witness JSON attestation files produced by this action
     value: ${{ steps.collect-outputs.outputs.witness-files }}
   sarif-files:
-    description: "Comma-separated list of SARIF files produced by this action"
+    description: Comma-separated list of SARIF files produced by this action
     value: ${{ steps.collect-outputs.outputs.sarif-files }}
 
 runs:

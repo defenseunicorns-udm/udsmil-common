@@ -68,8 +68,8 @@ jobs:
       - name: Vouch
         uses: ./.github/actions/vouch
         with:
-          attestations: "${{ steps.scan.outputs.witness-files }},lint-witness.json"
-          sarif-files: "${{ steps.scan.outputs.sarif-files }}"
+          attestations: ${{ steps.scan.outputs.witness-files }},lint-witness.json
+          sarif-files: ${{ steps.scan.outputs.sarif-files }}
           olm-catalog: ${{ vars.OLM_CATALOG }}
           olm-org: ${{ vars.OLM_ORG }}
           olm-user-id: ${{ secrets.OLM_USER_ID }}
