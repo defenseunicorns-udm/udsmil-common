@@ -1,0 +1,130 @@
+tasks:
+
+  # - name: lint
+  #   description: Lint YAML files in .github/, src/, and values/ with yamllint
+  #   actions:
+  #     - cmd: pip install --quiet yamllint && yamllint .github/ src/ values/
+  - name: lint
+    description: Run all linting commands
+    actions:
+      - task: yaml
+      - task: shell
+      - task: tasks
+
+  - name: yaml
+    description: Run YAML linting checks
+    actions:
+      # requires yamllint to be installed either from pip or brew
+      - description: Lint YAML files
+        cmd: yamllint . -c .yamllint --no-warnings
+
+  - name: shell
+    description: Run shellcheck on all Maru tasks, GitHub workflows, and local shell scripts
+    inputs:
+      task_globs:
+        description: Globs to match to Maru task files in the repo
+        default: tasks.yaml tasks/*.yaml
+    actions:
+      - description: Lint shell scripts in Maru tasks, GitHub workflows and .sh files
+        shell:
+          linux: bash
+          darwin: bash
+        cmd: |
+          # These settings:
+          # -x Assume files exist (since some scripts run on VMs)
+          # -e SC2016 Ignore unexpanded env vars (since sometimes we want to dynamically add a var to something like .bashrc)
+          # -e SC2050 Ignore if statements that are static (inputs / expressions are filtered for shellcheck to work which in some expressions makes them static)
+          # -e SC2001 Ignore sed replace suggestions (${text//search/replacement} syntax doesn't support regex so this suggestion often won't work)
+          # -e SC2002 Ignore rejection of `cat |` (redirection syntax is not always familiar to developers and while cat _could_ not exist that is extremely unlikely)
+          # -e SC2181 Ignore rejection of $? ($? can be confusing in some circumstances but also more readable in others with more complex commands)
+          export SHELLCHECK_OPTS="-x -e SC2016 -e SC2050 -e SC2001 -e SC2002 -e SC2181"
+
+          # Function to lint scripts inside `---` delimited files
+          lint_scripts() {
+            local file="$1"
+            local raw_scripts="$2"
+
+            echo "Processing $file..."
+
+            # Temporary variable to hold the current element
+            current_element=""
+
+            # Read input line by line
+            while IFS= read -r line; do
+                if [ "$line" = "---" ]; then
+                    # If we hit '---', print the current element if not empty
+                    if [ -n "$current_element" ]; then
+                        echo "$current_element" | shellcheck -
+                        current_element=""
+                    fi
+                else
+                    # Otherwise, keep adding to the current element
+                    current_element="$current_element$line
+                    "
+                fi
+            done <<< "$raw_scripts"
+
+            # Process the last element if it's not empty
+            if [ -n "$current_element" ]; then
+              echo "$current_element" | shellcheck -
+            fi
+          }
+
+          shopt -s nullglob # if nothing matches the glob expand to nothing
+          # Lint all scripts in Maru tasks
+          # shellcheck disable=SC2043
+          for yaml_file in ${{ .inputs.task_globs }}; do
+
+            # Look through all of the task actions and format .cmd entries with a dynamic shebang based on .shell.linux
+            yaml_query='.tasks[].actions[] | "---\n#!/bin/"+(.shell.linux // "sh")+"\n"+.cmd'
+
+            # Query the actual YAML file for the commands
+            raw_cmds=$(uds zarf tools yq -r "$yaml_query" "$yaml_file")
+
+            # Strip any \$\{\{ \}\} templates with the word "maru-expression" for compatibility
+            maru_expr_pattern=$'\x24\x7b\x7b[^}]*\x7d\x7d'
+            raw_scripts=$(printf '%s' "$raw_cmds" | sed "s|$maru_expr_pattern|maru-expression|g")
+
+            # If this file has scripts, lint them
+            if [ -n "$raw_scripts" ]; then
+              lint_scripts "$yaml_file" "$raw_scripts"
+            fi
+          done
+          shopt -u nullglob #reset nullglob behavior
+
+          # Lint all .sh files in the current directory
+          echo "Processing .sh files..."
+          find . -type f -name "*.sh" -exec shellcheck {} +
+
+          shopt -s nullglob # if nothing matches the glob expand to nothing
+          # Lint all scripts in GitHub workflows
+          for yaml_file in .github/workflows/*.yaml; do
+
+            # Look through all of the job steps and format .run entries with a dynamic shebang based on .shell
+            yaml_query='"---\n#!/bin/"+(.shell // "sh")+"\n"+.run'
+
+            # Query the actual YAML file for the commands
+            raw_runs=$(uds zarf tools yq -r '.jobs[].steps[]' "$yaml_file" | uds zarf tools yq -r "$yaml_query")
+
+            # Strip any \$\{\{ \}\} templates with the word "github-expression" for compatibility
+            github_expr_pattern=$'\x24\x7b\x7b[^}]*\x7d\x7d'
+            raw_scripts=$(printf '%s' "$raw_runs" | sed "s|$github_expr_pattern|github-expression|g")
+
+            # If this file has scripts, lint them
+            if [ -n "$raw_scripts" ]; then
+              lint_scripts "$yaml_file" "$raw_scripts"
+            fi
+          done
+          shopt -u nullglob #reset nullglob behavior
+  - name: tasks
+    description: Dry run all tasks in the base tasks file
+    actions:
+      - description: Dry run tasks
+        cmd: |
+          tasks=$(./uds run --list=md | tail -n +3 | awk -F '|' '{gsub("\\*\\*", "", $2); print $2}')
+
+          # Loop through each command and execute with --dry-run
+          for task in $tasks; do
+            printf "\n\033[0;36mChecking '\033[1;33m%s\033[0;36m' with --dry-run\033[0m\n" "$task"
+            ./uds run "$task" --dry-run
+          done

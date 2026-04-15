@@ -14,7 +14,7 @@ tasks:
   # https://docs.astral.sh/ruff/
   # ---------------------------------------------------------------------------
   - name: lint
-    description: "Lint Python source with Ruff"
+    description: Lint Python source with Ruff
     actions:
       - cmd: ruff check .
 

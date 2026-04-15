@@ -1,51 +1,51 @@
 name: Vouch
-description: "Builds a Zarf package with Witness attestation and vouches for it via OLM."
+description: Builds a Zarf package with Witness attestation and vouches for it via OLM.
 
 inputs:
   attestations:
-    description: "Comma-separated list of witness JSON attestation files to include (e.g. outputs from security-scan plus any external lint/test attestations)"
+    description: Comma-separated list of witness JSON attestation files to include (e.g. outputs from security-scan plus any external lint/test attestations)
     required: false
     default: ""
   sarif-files:
-    description: "Comma-separated list of SARIF files to include as evidence (e.g. outputs from security-scan plus any external SARIF files)"
+    description: Comma-separated list of SARIF files to include as evidence (e.g. outputs from security-scan plus any external SARIF files)
     required: false
     default: ""
   olm-catalog:
-    description: "OLM catalog hostname"
+    description: OLM catalog hostname
     required: true
   olm-org:
-    description: "OLM organization name"
+    description: OLM organization name
     required: true
   olm-user-id:
-    description: "OLM registry username"
+    description: OLM registry username
     required: true
   olm-password:
-    description: "OLM registry password"
+    description: OLM registry password
     required: true
   zarf-architecture:
-    description: "Target architecture for the Zarf package"
+    description: Target architecture for the Zarf package
     required: false
-    default: "amd64"
+    default: amd64
   zarf-flavor:
-    description: "Flavor for the Zarf package build"
+    description: Flavor for the Zarf package build
     required: false
-    default: "upstream"
+    default: upstream
   zarf-path:
-    description: "Path to the directory containing zarf.yaml. Use a subdirectory path for monorepos (e.g. 'services/api')."
+    description: Path to the directory containing zarf.yaml. Use a subdirectory path for monorepos (e.g. 'services/api').
     required: false
-    default: "."
+    default: .
   artifact-name:
-    description: "Name for the uploaded Zarf package artifact. Use unique names when building multiple packages in a matrix."
+    description: Name for the uploaded Zarf package artifact. Use unique names when building multiple packages in a matrix.
     required: false
-    default: "zarf-package"
+    default: zarf-package
   test-directory:
-    description: "Path to the test directory to pass to olm vouch. Leave empty to skip the --test-directory flag entirely."
+    description: Path to the test directory to pass to olm vouch. Leave empty to skip the --test-directory flag entirely.
     required: false
-    default: "tests"
+    default: tests
 
 outputs:
   zarf-package:
-    description: "Filename of the built Zarf package"
+    description: Filename of the built Zarf package
     value: ${{ steps.find-package.outputs.zarf-package }}
 
 runs:
@@ -102,6 +102,8 @@ runs:
         fi
 
         ./olm vouch ${{ steps.find-package.outputs.zarf-package }} \
+          --cat "$OLM_CAT" \
+          --org "$OLM_ORG" \
           $SARIF_FLAG \
           --log-level debug \
           $TEST_DIR_FLAG \

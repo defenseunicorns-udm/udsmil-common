@@ -1,0 +1,60 @@
+apiVersion: uds.dev/v1alpha1
+kind: Package
+metadata:
+  name: nginx
+  namespace: {{ .Release.Namespace }}
+spec:
+  monitor:
+    - selector:
+        nginx-metrics: "true"
+      portName: metrics
+      path: /metrics/
+      targetPort: 8081
+      description: Metrics
+
+  sso:
+    - name: Nginx
+      clientId: uds-package-nginx
+      redirectUris:
+        - "https://nginx.{{ .Values.domain }}/login"
+
+  network:
+    expose:
+      - service: nginx
+        selector:
+          app.kubernetes.io/name: nginx
+        gateway: tenant
+        port: 8080
+        description: Nginx
+        host: nginx
+
+    allow:
+      - direction: Ingress
+        remoteNamespace: "{{ .Release.Namespace }}"
+        description: "Intra-namespace ingress"
+      - direction: Egress
+        remoteNamespace: "{{ .Release.Namespace }}"
+        description: "Intra-namespace egress"
+      {{- range .Values.custom }}
+      - direction: {{ .direction }}
+        {{- if .selector }}
+        selector:
+          {{- toYaml .selector | nindent 10 }}
+        {{- end }}
+        {{- if .remoteNamespace }}
+        remoteNamespace: {{ .remoteNamespace }}
+        {{- end }}
+        {{- if .remoteSelector }}
+        remoteSelector:
+          {{- toYaml .remoteSelector | nindent 10 }}
+        {{- end }}
+        {{- if .remoteGenerated }}
+        remoteGenerated: {{ .remoteGenerated }}
+        {{- end }}
+        {{- if .port }}
+        port: {{ .port }}
+        {{- end }}
+        {{- if .description }}
+        description: {{ .description }}
+        {{- end }}
+      {{- end }}
