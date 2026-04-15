@@ -1,0 +1,12 @@
+domain: "###ZARF_VAR_DOMAIN###"
+
+# custom:
+#   # Example custom internal ingress rule
+#   - direction: Ingress
+#     selector:
+#       app: nginx
+#     remoteNamespace: nginx
+#     remoteSelector:
+#       app: nginx
+#     port: 8080
+#     description: "Ingress from nginx"

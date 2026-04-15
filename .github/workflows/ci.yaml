@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+
+      - name: Checkout code
+        uses: actions/checkout@v6.0.2
+
+      - name: UDS CLI Setup
+        uses: ./.github/actions/uds-cli-setup
+
+      - name: Witness Run Lint
+        uses: testifysec/witness-run-action@7aa15e327829f1f2a523365c564c948d5dde69dd # v0.3.3
+        with:
+          step: lint
+          enable-archivista: false
+          enable-sigstore: true
+          command: uds run lint
+          outfile: lint-witness.json
+
+      - name: Upload lint artifacts
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: lint-artifacts
+          path: lint-witness.json
+
+  scan-and-vouch:
+    needs: lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+
+      - name: Checkout code
+        uses: actions/checkout@v6.0.2
+
+      - name: UDS CLI Setup
+        uses: ./.github/actions/uds-cli-setup
+
+      - name: Download lint artifacts
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: lint-artifacts
+          path: .
+
+      - name: Security Scan
+        id: scan
+        uses: ./.github/actions/security-scan
+        with:
+          opengrep-scan-path: src/
+
+      - name: Vouch
+        uses: ./.github/actions/vouch
+        with:
+          attestations: "${{ steps.scan.outputs.witness-files }},lint-witness.json"
+          sarif-files: "${{ steps.scan.outputs.sarif-files }}"
+          olm-catalog: ${{ vars.OLM_CATALOG }}
+          olm-org: ${{ vars.OLM_ORG }}
+          olm-user-id: ${{ secrets.OLM_USER_ID }}
+          olm-password: ${{ secrets.OLM_PASSWORD }}

@@ -1,0 +1,5 @@
+apiVersion: v2
+name: chart
+description: uds-nginx-config
+type: application
+version: 0.1.0

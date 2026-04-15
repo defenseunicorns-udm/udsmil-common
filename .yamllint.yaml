@@ -1,0 +1,16 @@
+extends: default
+
+rules:
+  # GitHub Actions files frequently have long lines (commands, URLs, expressions)
+  line-length:
+    max: 150
+    level: warning
+
+  # GitHub Actions uses 'true'/'false' as both booleans and strings
+  truthy:
+    allowed-values: ['true', 'false']
+
+  # Two-space indentation is standard for GitHub Actions YAML
+  indentation:
+    spaces: 2
+    indent-sequences: true
