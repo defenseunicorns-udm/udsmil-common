@@ -26,6 +26,7 @@ spec:
         gateway: tenant
         port: 8080
         description: Nginx
+        host: nginx
 
     allow:
       - direction: Ingress
