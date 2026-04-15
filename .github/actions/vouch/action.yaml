@@ -102,6 +102,8 @@ runs:
         fi
 
         ./olm vouch ${{ steps.find-package.outputs.zarf-package }} \
+          --cat "$OLM_CAT" \
+          --org "$OLM_ORG" \
           $SARIF_FLAG \
           --log-level debug \
           $TEST_DIR_FLAG \
