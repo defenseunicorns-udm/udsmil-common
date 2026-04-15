@@ -63,7 +63,7 @@ runs:
         enable-sigstore: true
         command: opengrep scan ${{ inputs.opengrep-scan-path }} --sarif --sarif-output opengrep.sarif.json
         outfile: opengrep-witness.json
-      env: 
+      env:
         FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     - name: Witness Run Gitleaks
       uses: testifysec/witness-run-action@7aa15e327829f1f2a523365c564c948d5dde69dd # v0.3.3
@@ -73,7 +73,7 @@ runs:
         enable-sigstore: true
         command: gitleaks dir . --report-format sarif --report-path gitleaks.sarif.json
         outfile: gitleaks-witness.json
-      env: 
+      env:
         FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     - name: Collect outputs
       id: collect-outputs
