@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.1.0] — 2026-04-17 · `<pin-sha-here>`
+## [0.1.0] — 2026-04-17 · `773bb3f554a729e901156bb35e5c343effd1bd47`
 
 ### Added callable GitHub actions
 
@@ -15,5 +15,5 @@ All notable changes to this project will be documented in this file.
 
 ### Notes
 
-- Actions are referenced as `defenseunicorns-udm/udm-common/<action-name>@<sha>`.
+- Actions are referenced as `defenseunicorns-udm/udm-common/<action-name>@773bb3f554a729e901156bb35e5c343effd1bd47`.
 - See [`examples/ci-example.yaml`](examples/ci-example.yaml) for a full lint → scan → vouch → publish pipeline for GitHub.

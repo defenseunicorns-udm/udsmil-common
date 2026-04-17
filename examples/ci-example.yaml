@@ -22,7 +22,7 @@ jobs:
       # TODO: Update pinned shas once scan/vouch actions are merged.
 
       - name: UDS CLI Setup
-        uses: defenseunicorns-udm/udm-common/.github/actions/uds-cli-setup@f366c21d12c7699f7db5eabe7cde129071bdee79
+        uses: defenseunicorns-udm/udm-common/.github/actions/uds-cli-setup@773bb3f554a729e901156bb35e5c343effd1bd47
 
       # Lint logic is owned by the calling repo via a UDS task.
       # Define a 'lint' task in your tasks.yaml that runs your linter(s).
@@ -53,7 +53,7 @@ jobs:
         uses: actions/checkout@v6.0.2
 
       - name: UDS CLI Setup
-        uses: defenseunicorns-udm/udm-common/.github/actions/uds-cli-setup@f366c21d12c7699f7db5eabe7cde129071bdee79
+        uses: defenseunicorns-udm/udm-common/.github/actions/uds-cli-setup@773bb3f554a729e901156bb35e5c343effd1bd47
 
       - name: Download lint artifacts
         uses: actions/download-artifact@v8.0.1
@@ -63,10 +63,10 @@ jobs:
 
       - name: Security Scan
         id: scan
-        uses: defenseunicorns-udm/udm-common/.github/actions/security-scan@f366c21d12c7699f7db5eabe7cde129071bdee79
+        uses: defenseunicorns-udm/udm-common/.github/actions/security-scan@773bb3f554a729e901156bb35e5c343effd1bd47
 
       - name: Vouch
-        uses: defenseunicorns-udm/udm-common/.github/actions/vouch@f366c21d12c7699f7db5eabe7cde129071bdee79
+        uses: defenseunicorns-udm/udm-common/.github/actions/vouch@773bb3f554a729e901156bb35e5c343effd1bd47
         with:
           attestations: ${{ steps.scan.outputs.witness-files }},lint-witness.json
           sarif-files: ${{ steps.scan.outputs.sarif-files }}
@@ -85,10 +85,10 @@ jobs:
         uses: actions/checkout@v6.0.2
 
       - name: UDS CLI Setup
-        uses: defenseunicorns-udm/udm-common/.github/actions/uds-cli-setup@f366c21d12c7699f7db5eabe7cde129071bdee79
+        uses: defenseunicorns-udm/udm-common/.github/actions/uds-cli-setup@773bb3f554a729e901156bb35e5c343effd1bd47
 
       - name: Publish
-        uses: defenseunicorns-udm/udm-common/.github/actions/publish@f366c21d12c7699f7db5eabe7cde129071bdee79
+        uses: defenseunicorns-udm/udm-common/.github/actions/publish@773bb3f554a729e901156bb35e5c343effd1bd47
         with:
           registry: registry.uds-mil.us
           registry-org: uds-army-demo
