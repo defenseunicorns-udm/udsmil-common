@@ -1,0 +1,45 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g. 0.1.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Extract release notes
+        id: notes
+        run: |
+          VERSION="${{ inputs.version }}"
+          NOTES=$(awk "/^## \[${VERSION}\]/{ found=1; next } found && /^## \[/{ exit } found{ print }" CHANGELOG.md)
+          if [ -z "$NOTES" ]; then
+            echo "No changelog entry found for version ${VERSION}" >&2
+            exit 1
+          fi
+          printf '%s' "$NOTES" > /tmp/release-notes.md
+
+      - name: Tag release
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "v${{ inputs.version }}"
+          git push origin "v${{ inputs.version }}"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v${{ inputs.version }}" \
+            --title "v${{ inputs.version }}" \
+            --notes-file /tmp/release-notes.md

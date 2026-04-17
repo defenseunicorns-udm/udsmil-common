@@ -1,4 +1,4 @@
-# udsmil-common
+# actions
 
 Shared GitHub Actions and reusable workflows for UDS MIL customers. Provides
 a supply-chain-security pipeline that lints, scans, builds, vouches, and
@@ -8,19 +8,20 @@ publishes Zarf packages to the UDS MIL registry.
 
 | Action | Description |
 |--------|-------------|
-| [`uds-cli-setup`](.github/actions/uds-cli-setup/action.yaml) | Installs the UDS CLI |
-| [`olm-cli-setup`](.github/actions/olm-cli-setup/action.yaml) | Authenticates with the UDS registry and installs the OLM CLI |
-| [`security-scan`](.github/actions/security-scan/action.yaml) | Runs Gitleaks secrets scanning and OpenGrep SAST; outputs witness JSON and SARIF file lists |
-| [`vouch`](.github/actions/vouch/action.yaml) | Builds a Zarf package with Witness attestation and vouches for it via OLM |
-| [`publish`](.github/actions/publish/action.yaml) | Publishes a vouched Zarf package to the UDS registry |
-| [`verify-permissions`](.github/actions/verify-permissions/action.yaml) | Validates required GitHub Actions OIDC permissions are present |
+| [`uds-cli-setup`](uds-cli-setup/action.yaml) | Installs the UDS CLI |
+| [`olm-cli-setup`](olm-cli-setup/action.yaml) | Authenticates with the UDS registry and installs the OLM CLI |
+| [`security-scan`](security-scan/action.yaml) | Runs Gitleaks secrets scanning and OpenGrep SAST; outputs witness JSON and SARIF file lists |
+| [`vouch`](vouch/action.yaml) | Builds a Zarf package with Witness attestation and vouches for it via OLM |
+| [`publish`](publish/action.yaml) | Publishes a vouched Zarf package to the UDS registry |
+| [`verify-permissions`](verify-permissions/action.yaml) | Validates required GitHub Actions OIDC permissions are present |
 
 ## Quickstart
 
-Reference actions and workflows from this repo using the full path and a ref:
+Reference actions from this repo using the action name and a pinned SHA:
 
 ```yaml
-uses: defenseunicorns-udm/udsmil-common/.github/actions/security-scan@f366c21d12c7699f7db5eabe7cde129071bdee79
+# TODO: Replace <pin-sha-here> with the SHA from CHANGELOG.md after release.
+uses: defenseunicorns-udm/actions/security-scan@<pin-sha-here>
 ```
 
 ### Minimal CI workflow
@@ -33,8 +34,8 @@ jobs:
       contents: read
       id-token: write
     steps:
-        uses: actions/checkout@v6.0.2
-      - uses: defenseunicorns-udm/udsmil-common/.github/actions/uds-cli-setup@f366c21d12c7699f7db5eabe7cde129071bdee79
+      - uses: actions/checkout@v6.0.2
+      - uses: defenseunicorns-udm/actions/uds-cli-setup@<pin-sha-here>
       - uses: testifysec/witness-run-action@7aa15e327829f1f2a523365c564c948d5dde69dd
         with:
           step: lint
@@ -42,7 +43,7 @@ jobs:
           enable-sigstore: true
           command: uds run lint        # defined in your tasks.yaml
           outfile: lint-witness.json
-        uses: actions/upload-artifact@v7.0.1
+      - uses: actions/upload-artifact@v7.0.1
         with:
           name: lint-artifacts
           path: lint-witness.json
@@ -55,15 +56,15 @@ jobs:
       packages: write
       id-token: write
     steps:
-        uses: actions/checkout@v6.0.2
-      - uses: defenseunicorns-udm/udsmil-common/.github/actions/uds-cli-setup@f366c21d12c7699f7db5eabe7cde129071bdee79
+      - uses: actions/checkout@v6.0.2
+      - uses: defenseunicorns-udm/actions/uds-cli-setup@<pin-sha-here>
       - uses: actions/download-artifact@v8.0.1
         with:
           name: lint-artifacts
           path: .
       - id: scan
-        uses: defenseunicorns-udm/udsmil-common/.github/actions/security-scan@f366c21d12c7699f7db5eabe7cde129071bdee79
-      - uses: defenseunicorns-udm/udsmil-common/.github/actions/vouch@f366c21d12c7699f7db5eabe7cde129071bdee79
+        uses: defenseunicorns-udm/actions/security-scan@<pin-sha-here>
+      - uses: defenseunicorns-udm/actions/vouch@<pin-sha-here>
         with:
           attestations: "${{ steps.scan.outputs.witness-files }},lint-witness.json"
           sarif-files: "${{ steps.scan.outputs.sarif-files }}"
@@ -78,9 +79,9 @@ jobs:
     permissions:
       contents: read
     steps:
-        uses: actions/checkout@v6.0.2
-      - uses: defenseunicorns-udm/udsmil-common/.github/actions/uds-cli-setup@f366c21d12c7699f7db5eabe7cde129071bdee79
-      - uses: defenseunicorns-udm/udsmil-common/.github/actions/publish@f366c21d12c7699f7db5eabe7cde129071bdee79
+      - uses: actions/checkout@v6.0.2
+      - uses: defenseunicorns-udm/actions/uds-cli-setup@<pin-sha-here>
+      - uses: defenseunicorns-udm/actions/publish@<pin-sha-here>
         with:
           registry: registry.uds-mil.us
           registry-org: <your-org-name>
@@ -100,10 +101,10 @@ jobs:
         service: [api, worker, frontend]
     steps:
       - id: scan
-        uses: defenseunicorns-udm/udsmil-common/.github/actions/security-scan@f366c21d12c7699f7db5eabe7cde129071bdee79
+        uses: defenseunicorns-udm/actions/security-scan@<pin-sha-here>
         with:
           opengrep-scan-path: services/${{ matrix.service }}
-      - uses: defenseunicorns-udm/udsmil-common/.github/actions/vouch@f366c21d12c7699f7db5eabe7cde129071bdee79
+      - uses: defenseunicorns-udm/actions/vouch@<pin-sha-here>
         with:
           attestations: "${{ steps.scan.outputs.witness-files }}"
           sarif-files: "${{ steps.scan.outputs.sarif-files }}"
