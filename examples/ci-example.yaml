@@ -27,7 +27,8 @@ jobs:
       # Lint logic is owned by the calling repo via a UDS task.
       # Define a 'lint' task in your tasks.yaml that runs your linter(s).
       - name: Witness Run Lint
-        uses: testifysec/witness-run-action@7aa15e327829f1f2a523365c564c948d5dde69dd # v0.3.3
+        # TODO: replace <sha> with the commit SHA after this change is merged to main
+        uses: defenseunicorns-udm/udsmil-common/src/witness-run@main
         with:
           step: lint
           enable-archivista: false

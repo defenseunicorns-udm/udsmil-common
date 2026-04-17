@@ -24,7 +24,7 @@ jobs:
         uses: ./.github/actions/uds-cli-setup
 
       - name: Witness Run Lint
-        uses: testifysec/witness-run-action@7aa15e327829f1f2a523365c564c948d5dde69dd # v0.3.3
+        uses: ./src/witness-run
         with:
           step: lint
           enable-archivista: false
