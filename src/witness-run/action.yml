@@ -86,6 +86,16 @@ inputs:
     description: Enable tracing for the command
     required: false
     default: "false"
+  cosign-certificate-identity:
+    description: >
+      Expected Sigstore certificate identity URI for the witness release signing workflow.
+      Defaults to the official in-toto/witness release workflow URI for the configured version.
+    required: false
+    default: ""
+  cosign-certificate-oidc-issuer:
+    description: Expected OIDC issuer for the witness release signing certificate.
+    required: false
+    default: "https://token.actions.githubusercontent.com"
   version:
     description: Version of the Witness CLI to install (MAJOR.MINOR.PATCH, no v prefix)
     required: false

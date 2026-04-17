@@ -6,13 +6,15 @@
   "scripts": {
     "build": "ncc build index.ts -o dist --source-map --license licenses.txt",
     "test": "jest",
+    "test-coverage": "jest --coverage",
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."
   },
   "dependencies": {
     "@actions/core": "^1.11.1",
     "@actions/exec": "^1.1.1",
-    "@actions/tool-cache": "^2.0.1"
+    "@actions/tool-cache": "^2.0.1",
+    "sigstore": "^2.3.1"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",

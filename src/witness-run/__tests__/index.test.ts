@@ -2,10 +2,13 @@ import * as core from "@actions/core";
 import * as exec from "@actions/exec";
 import * as tc from "@actions/tool-cache";
 import * as fs from "fs";
+import * as crypto from "crypto";
+import { verify as sigstoreVerify } from "sigstore";
 
 jest.mock("@actions/core");
 jest.mock("@actions/exec");
 jest.mock("@actions/tool-cache");
+jest.mock("sigstore");
 // Partial mock: preserve fs.promises (used by @actions/core internals) while
 // mocking only the sync functions called by index.ts.
 jest.mock("fs", () => {
@@ -16,6 +19,7 @@ jest.mock("fs", () => {
     appendFileSync: jest.fn(),
     existsSync: jest.fn(),
     mkdirSync: jest.fn(),
+    writeFileSync: jest.fn(),
   };
 });
 
@@ -23,12 +27,17 @@ const mockedCore = jest.mocked(core);
 const mockedExec = jest.mocked(exec);
 const mockedTc = jest.mocked(tc);
 const mockedFs = jest.mocked(fs);
+const mockedSigstoreVerify = jest.mocked(sigstoreVerify);
 
 import {
   extractDesiredGitOIDs,
   buildWitnessArgs,
   getDownloadURL,
   getArch,
+  getArtifactFilename,
+  getVerificationURLs,
+  computeSha256File,
+  verifyWitnessSignature,
   run,
   WitnessParams,
 } from "../index";
@@ -101,19 +110,34 @@ function makeInputMap(overrides: Record<string, string> = {}): Record<string, st
     "attestor-slsa-export": "false",
     "attestor-maven-pom-path": "",
     "witness-install-dir": "",
+    "cosign-certificate-identity": "",
+    "cosign-certificate-oidc-issuer": "",
     ...overrides,
   };
 }
+
+// SHA256 of an empty buffer -- matches what computeSha256File returns when
+// readFileSync is mocked to return "".
+const EMPTY_SHA256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
 function setupRunMocks(inputOverrides: Record<string, string> = {}): void {
   const inputs = makeInputMap(inputOverrides);
   mockedCore.getInput.mockImplementation((name: string) => inputs[name] ?? "");
   mockedTc.find.mockReturnValue("/cached/witness");
+  mockedTc.cacheDir.mockResolvedValue("/tmp/witness-cached");
   mockedCore.addPath.mockImplementation(() => undefined);
   mockedExec.exec.mockResolvedValue(0);
-  mockedFs.readFileSync.mockReturnValue("");
+  // Return the correct stored SHA for sidecar reads so the cache check passes.
+  mockedFs.readFileSync.mockImplementation((filePath: unknown) => {
+    if (typeof filePath === "string" && filePath.endsWith("witness.sha256")) {
+      return EMPTY_SHA256;
+    }
+    return "";
+  });
   mockedFs.existsSync.mockReturnValue(true);
   mockedFs.appendFileSync.mockImplementation(() => undefined);
+  mockedFs.writeFileSync.mockImplementation(() => undefined);
+  mockedSigstoreVerify.mockResolvedValue(undefined);
 }
 
 // ---------------------------------------------------------------------------
@@ -282,10 +306,9 @@ describe("getDownloadURL", () => {
     expect(url).toContain("darwin_arm64.tar.gz");
   });
 
-  it("win32 produces windows zip URL", () => {
+  it("win32 produces windows tar.gz URL", () => {
     const url = getDownloadURL("0.9.2", "win32", "amd64");
-    expect(url).toContain("windows_amd64.zip");
-    expect(url).not.toContain(".tar.gz");
+    expect(url).toContain("windows_amd64.tar.gz");
   });
 });
 
@@ -670,20 +693,21 @@ describe("run() - witness download", () => {
     delete process.env["GITHUB_STEP_SUMMARY"];
   });
 
-  it("downloads, extracts, and caches witness when not in tool cache", async () => {
+  it("downloads, verifies, extracts, and caches witness when not in tool cache", async () => {
     setupRunMocks({ command: "echo hello" });
     mockedTc.find.mockReturnValue("");
     mockedTc.downloadTool.mockResolvedValue("/tmp/witness.tar.gz");
     mockedTc.extractTar.mockResolvedValue("/tmp/witness-extracted");
-    mockedTc.cacheFile.mockResolvedValue("/tmp/witness-cached");
+    mockedTc.cacheDir.mockResolvedValue("/tmp/witness-cached");
     mockedFs.existsSync.mockReturnValue(true);
     await run();
     expect(mockedTc.downloadTool).toHaveBeenCalledWith(
       expect.stringContaining("witness_0.9.2_linux")
     );
+    expect(mockedSigstoreVerify).toHaveBeenCalled();
     expect(mockedTc.extractTar).toHaveBeenCalledWith("/tmp/witness.tar.gz", expect.any(String));
-    expect(mockedTc.cacheFile).toHaveBeenCalled();
-    expect(mockedCore.addPath).toHaveBeenCalledWith("/tmp/witness-extracted");
+    expect(mockedTc.cacheDir).toHaveBeenCalled();
+    expect(mockedCore.addPath).toHaveBeenCalledWith("/tmp/witness-cached");
   });
 
   it("creates install directory when it does not already exist", async () => {
@@ -691,24 +715,23 @@ describe("run() - witness download", () => {
     mockedTc.find.mockReturnValue("");
     mockedTc.downloadTool.mockResolvedValue("/tmp/witness.tar.gz");
     mockedTc.extractTar.mockResolvedValue("/tmp/witness-extracted");
-    mockedTc.cacheFile.mockResolvedValue("/tmp/witness-cached");
+    mockedTc.cacheDir.mockResolvedValue("/tmp/witness-cached");
     mockedFs.existsSync.mockReturnValue(false);
     await run();
     expect(mockedFs.mkdirSync).toHaveBeenCalledWith(expect.any(String), { recursive: true });
   });
 
-  it("uses extractZip on win32", async () => {
+  it("uses extractTar on win32 (witness publishes tar.gz for all platforms)", async () => {
     const originalPlatform = process.platform;
     Object.defineProperty(process, "platform", { value: "win32", configurable: true });
     setupRunMocks({ command: "echo hello" });
     mockedTc.find.mockReturnValue("");
-    mockedTc.downloadTool.mockResolvedValue("/tmp/witness.zip");
-    mockedTc.extractZip.mockResolvedValue("/tmp/witness-extracted");
-    mockedTc.cacheFile.mockResolvedValue("/tmp/witness-cached");
+    mockedTc.downloadTool.mockResolvedValue("/tmp/witness.tar.gz");
+    mockedTc.extractTar.mockResolvedValue("/tmp/witness-extracted");
+    mockedTc.cacheDir.mockResolvedValue("/tmp/witness-cached");
     mockedFs.existsSync.mockReturnValue(true);
     await run();
-    expect(mockedTc.extractZip).toHaveBeenCalledWith("/tmp/witness.zip", expect.any(String));
-    expect(mockedTc.extractTar).not.toHaveBeenCalled();
+    expect(mockedTc.extractTar).toHaveBeenCalledWith("/tmp/witness.tar.gz", expect.any(String));
     Object.defineProperty(process, "platform", { value: originalPlatform, configurable: true });
   });
 });
@@ -772,5 +795,300 @@ describe("run() - stderr capture", () => {
     });
     await run();
     expect(mockedCore.setOutput).toHaveBeenCalledWith("git_oid", oid);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Group 15: getArtifactFilename
+// ---------------------------------------------------------------------------
+
+describe("getArtifactFilename", () => {
+  it("linux amd64 produces linux tar.gz name", () => {
+    expect(getArtifactFilename("0.9.2", "linux", "amd64")).toBe("witness_0.9.2_linux_amd64.tar.gz");
+  });
+
+  it("linux arm64 produces linux arm64 tar.gz name", () => {
+    expect(getArtifactFilename("0.9.2", "linux", "arm64")).toBe("witness_0.9.2_linux_arm64.tar.gz");
+  });
+
+  it("darwin amd64 produces darwin tar.gz name", () => {
+    expect(getArtifactFilename("0.9.2", "darwin", "amd64")).toBe("witness_0.9.2_darwin_amd64.tar.gz");
+  });
+
+  it("darwin arm64 produces darwin arm64 tar.gz name", () => {
+    expect(getArtifactFilename("0.9.2", "darwin", "arm64")).toBe("witness_0.9.2_darwin_arm64.tar.gz");
+  });
+
+  it("win32 amd64 produces windows tar.gz name", () => {
+    expect(getArtifactFilename("0.9.2", "win32", "amd64")).toBe("witness_0.9.2_windows_amd64.tar.gz");
+  });
+
+  it("includes the version in the filename", () => {
+    expect(getArtifactFilename("1.2.3", "linux", "amd64")).toContain("1.2.3");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Group 16: getVerificationURLs
+// ---------------------------------------------------------------------------
+
+describe("getVerificationURLs", () => {
+  it("linux amd64 produces correct .pem and .sig URLs", () => {
+    const { certURL, sigURL } = getVerificationURLs("0.9.2", "linux", "amd64");
+    expect(certURL).toBe(
+      "https://github.com/in-toto/witness/releases/download/v0.9.2/witness_0.9.2_linux_amd64.tar.gz.pem"
+    );
+    expect(sigURL).toBe(
+      "https://github.com/in-toto/witness/releases/download/v0.9.2/witness_0.9.2_linux_amd64.tar.gz.sig"
+    );
+  });
+
+  it("darwin arm64 produces correct .pem and .sig URLs", () => {
+    const { certURL, sigURL } = getVerificationURLs("0.9.2", "darwin", "arm64");
+    expect(certURL).toContain("darwin_arm64.tar.gz.pem");
+    expect(sigURL).toContain("darwin_arm64.tar.gz.sig");
+  });
+
+  it("win32 amd64 produces .pem and .sig URLs based on the tar.gz archive name", () => {
+    const { certURL, sigURL } = getVerificationURLs("0.9.2", "win32", "amd64");
+    expect(certURL).toContain("windows_amd64.tar.gz.pem");
+    expect(sigURL).toContain("windows_amd64.tar.gz.sig");
+  });
+
+  it("URLs include the version tag", () => {
+    const { certURL } = getVerificationURLs("1.2.3", "linux", "amd64");
+    expect(certURL).toContain("v1.2.3");
+    expect(certURL).toContain("1.2.3");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Group 17: computeSha256File
+// ---------------------------------------------------------------------------
+
+describe("computeSha256File", () => {
+  it("returns correct SHA256 hex for known content", () => {
+    mockedFs.readFileSync.mockReturnValueOnce(Buffer.from("hello world"));
+    const expected = crypto.createHash("sha256").update("hello world").digest("hex");
+    expect(computeSha256File("/fake/file")).toBe(expected);
+  });
+
+  it("returns a different SHA for different content", () => {
+    mockedFs.readFileSync.mockReturnValueOnce(Buffer.from("content-a"));
+    const sha1 = computeSha256File("/fake/a");
+    mockedFs.readFileSync.mockReturnValueOnce(Buffer.from("content-b"));
+    const sha2 = computeSha256File("/fake/b");
+    expect(sha1).not.toBe(sha2);
+  });
+
+  it("returns a 64-character lowercase hex string", () => {
+    mockedFs.readFileSync.mockReturnValueOnce(Buffer.from("test"));
+    const sha = computeSha256File("/fake/file");
+    expect(sha).toMatch(/^[0-9a-f]{64}$/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Group 18: verifyWitnessSignature
+// ---------------------------------------------------------------------------
+
+describe("verifyWitnessSignature", () => {
+  it("calls sigstore.verify with correct bundle shape and options", async () => {
+    mockedFs.readFileSync.mockReturnValueOnce(Buffer.from("archive-content"));
+    mockedSigstoreVerify.mockResolvedValue(undefined);
+
+    await verifyWitnessSignature(
+      "/tmp/archive.tar.gz",
+      "-----BEGIN CERTIFICATE-----\naGVsbG8=\n-----END CERTIFICATE-----\n",
+      "c2lnbmF0dXJl",
+      "https://github.com/in-toto/witness/.github/workflows/release.yml@refs/tags/v0.9.2",
+      "https://token.actions.githubusercontent.com"
+    );
+
+    expect(mockedSigstoreVerify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mediaType: expect.stringContaining("sigstore.bundle"),
+        verificationMaterial: expect.objectContaining({
+          x509CertificateChain: expect.objectContaining({
+            certificates: expect.arrayContaining([
+              expect.objectContaining({ rawBytes: expect.any(String) }),
+            ]),
+          }),
+        }),
+        messageSignature: expect.objectContaining({
+          signature: "c2lnbmF0dXJl",
+        }),
+      }),
+      expect.any(Buffer),
+      expect.objectContaining({
+        certificateIdentityURI: "https://github.com/in-toto/witness/.github/workflows/release.yml@refs/tags/v0.9.2",
+        certificateIssuer: "https://token.actions.githubusercontent.com",
+        tlogThreshold: 0,
+      })
+    );
+  });
+
+  it("re-throws when sigstore.verify rejects", async () => {
+    mockedFs.readFileSync.mockReturnValueOnce(Buffer.from("archive"));
+    mockedSigstoreVerify.mockRejectedValue(new Error("signature invalid"));
+
+    await expect(
+      verifyWitnessSignature("/tmp/archive.tar.gz", "cert", "sig", "identity", "issuer")
+    ).rejects.toThrow("signature invalid");
+  });
+
+  it("strips PEM headers from certificate before embedding in bundle", async () => {
+    mockedFs.readFileSync.mockReturnValueOnce(Buffer.from("data"));
+    mockedSigstoreVerify.mockResolvedValue(undefined);
+
+    await verifyWitnessSignature(
+      "/tmp/a.tar.gz",
+      "-----BEGIN CERTIFICATE-----\naGVsbG8=\n-----END CERTIFICATE-----\n",
+      "sig",
+      "id",
+      "issuer"
+    );
+
+    const bundleArg = mockedSigstoreVerify.mock.calls[0][0] as {
+      verificationMaterial: { x509CertificateChain: { certificates: { rawBytes: string }[] } };
+    };
+    const rawBytes = bundleArg.verificationMaterial.x509CertificateChain.certificates[0].rawBytes;
+    expect(rawBytes).not.toContain("-----");
+    expect(rawBytes).toBe("aGVsbG8=");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Group 19: run() -- cache SHA verification
+// ---------------------------------------------------------------------------
+
+describe("run() - cache SHA verification", () => {
+  beforeEach(() => {
+    process.env["GITHUB_WORKSPACE"] = FAKE_WORKSPACE;
+    process.env["GITHUB_STEP_SUMMARY"] = FAKE_SUMMARY;
+  });
+
+  afterEach(() => {
+    delete process.env["GITHUB_WORKSPACE"];
+    delete process.env["GITHUB_STEP_SUMMARY"];
+  });
+
+  it("passes when cached binary SHA matches sidecar", async () => {
+    setupRunMocks();
+    await run();
+    expect(mockedCore.setFailed).not.toHaveBeenCalledWith(
+      expect.stringContaining("tampered")
+    );
+  });
+
+  it("calls setFailed when cached binary SHA does not match sidecar", async () => {
+    setupRunMocks();
+    mockedFs.readFileSync.mockImplementation((filePath: unknown) => {
+      if (typeof filePath === "string" && filePath.endsWith("witness.sha256")) {
+        return "0000000000000000000000000000000000000000000000000000000000000000";
+      }
+      return "";
+    });
+    await run();
+    expect(mockedCore.setFailed).toHaveBeenCalledWith(
+      expect.stringContaining("tampered")
+    );
+  });
+
+  it("re-downloads when sidecar is missing from cache", async () => {
+    setupRunMocks();
+    mockedFs.existsSync.mockImplementation((filePath: unknown) => {
+      if (typeof filePath === "string" && filePath.endsWith("witness.sha256")) {
+        return false;
+      }
+      return true;
+    });
+    mockedTc.downloadTool.mockResolvedValue("/tmp/witness.tar.gz");
+    mockedTc.extractTar.mockResolvedValue("/tmp/witness-extracted");
+    mockedTc.cacheDir.mockResolvedValue("/tmp/witness-cached");
+    await run();
+    expect(mockedTc.downloadTool).toHaveBeenCalled();
+    expect(mockedCore.setFailed).not.toHaveBeenCalledWith(
+      expect.stringContaining("tampered")
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Group 20: run() -- Sigstore verification on download
+// ---------------------------------------------------------------------------
+
+describe("run() - Sigstore verification on download", () => {
+  beforeEach(() => {
+    process.env["GITHUB_WORKSPACE"] = FAKE_WORKSPACE;
+    process.env["GITHUB_STEP_SUMMARY"] = FAKE_SUMMARY;
+  });
+
+  afterEach(() => {
+    delete process.env["GITHUB_WORKSPACE"];
+    delete process.env["GITHUB_STEP_SUMMARY"];
+  });
+
+  it("downloads archive, .pem cert, and .sig in parallel", async () => {
+    setupRunMocks();
+    mockedTc.find.mockReturnValue("");
+    mockedTc.downloadTool.mockResolvedValue("/tmp/dl");
+    mockedTc.extractTar.mockResolvedValue("/tmp/extracted");
+    mockedTc.cacheDir.mockResolvedValue("/tmp/cached");
+    await run();
+    const downloadCalls = mockedTc.downloadTool.mock.calls.map(([url]) => url);
+    expect(downloadCalls.some((u) => u.endsWith(".tar.gz"))).toBe(true);
+    expect(downloadCalls.some((u) => u.endsWith(".pem"))).toBe(true);
+    expect(downloadCalls.some((u) => u.endsWith(".sig"))).toBe(true);
+  });
+
+  it("uses default certificate identity when cosign-certificate-identity input is empty", async () => {
+    setupRunMocks({ version: "0.9.2" });
+    mockedTc.find.mockReturnValue("");
+    mockedTc.downloadTool.mockResolvedValue("/tmp/dl");
+    mockedTc.extractTar.mockResolvedValue("/tmp/extracted");
+    mockedTc.cacheDir.mockResolvedValue("/tmp/cached");
+    await run();
+    const [, , opts] = mockedSigstoreVerify.mock.calls[0];
+    expect((opts as { certificateIdentityURI?: string }).certificateIdentityURI).toContain(
+      "in-toto/witness/.github/workflows/release.yml@refs/tags/v0.9.2"
+    );
+  });
+
+  it("uses provided certificate identity when cosign-certificate-identity input is set", async () => {
+    const customIdentity = "https://example.com/custom-workflow@refs/heads/main";
+    setupRunMocks({ "cosign-certificate-identity": customIdentity });
+    mockedTc.find.mockReturnValue("");
+    mockedTc.downloadTool.mockResolvedValue("/tmp/dl");
+    mockedTc.extractTar.mockResolvedValue("/tmp/extracted");
+    mockedTc.cacheDir.mockResolvedValue("/tmp/cached");
+    await run();
+    const [, , opts] = mockedSigstoreVerify.mock.calls[0];
+    expect((opts as { certificateIdentityURI?: string }).certificateIdentityURI).toBe(customIdentity);
+  });
+
+  it("calls setFailed when Sigstore verification fails", async () => {
+    setupRunMocks();
+    mockedTc.find.mockReturnValue("");
+    mockedTc.downloadTool.mockResolvedValue("/tmp/dl");
+    mockedSigstoreVerify.mockRejectedValue(new Error("sig check failed"));
+    await run();
+    expect(mockedCore.setFailed).toHaveBeenCalledWith(
+      expect.stringContaining("sig check failed")
+    );
+  });
+
+  it("writes SHA sidecar and caches the directory", async () => {
+    setupRunMocks();
+    mockedTc.find.mockReturnValue("");
+    mockedTc.downloadTool.mockResolvedValue("/tmp/dl");
+    mockedTc.extractTar.mockResolvedValue("/tmp/extracted");
+    mockedTc.cacheDir.mockResolvedValue("/tmp/cached");
+    await run();
+    expect(mockedFs.writeFileSync).toHaveBeenCalledWith(
+      expect.stringContaining("witness.sha256"),
+      expect.any(String)
+    );
+    expect(mockedTc.cacheDir).toHaveBeenCalled();
   });
 });

@@ -2,7 +2,7 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["dist/**", "node_modules/**"],
+    ignores: ["dist/**", "node_modules/**", "coverage/**"],
   },
   // Type-checked rules for TypeScript source files
   ...tseslint.configs.recommendedTypeChecked,
@@ -25,5 +25,12 @@ export default tseslint.config(
   {
     files: ["eslint.config.mjs"],
     extends: [tseslint.configs.disableTypeChecked],
+  },
+  // @types/jest matcher helpers return `any`; unsafe-assignment is too noisy in tests
+  {
+    files: ["__tests__/**/*.ts"],
+    rules: {
+      "@typescript-eslint/no-unsafe-assignment": "off",
+    },
   }
 );

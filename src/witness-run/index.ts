@@ -1,10 +1,13 @@
 import * as core from "@actions/core";
 import * as exec from "@actions/exec";
 import * as tc from "@actions/tool-cache";
+import * as crypto from "crypto";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import * as process from "process";
+import { verify as sigstoreVerify } from "sigstore";
+import type { Bundle } from "sigstore";
 
 export type { WitnessArch, WitnessParams } from "./types";
 import type { WitnessArch, WitnessParams } from "./types";
@@ -15,16 +18,93 @@ export function getArch(): WitnessArch {
   return process.arch === "arm64" ? "arm64" : "amd64";
 }
 
+export function getArtifactFilename(
+  version: string,
+  platform: NodeJS.Platform,
+  arch: WitnessArch
+): string {
+  let osName: string;
+  if (platform === "win32") {
+    osName = "windows";
+  } else if (platform === "darwin") {
+    osName = "darwin";
+  } else {
+    osName = "linux";
+  }
+  return `witness_${version}_${osName}_${arch}.tar.gz`;
+}
+
 export function getDownloadURL(
   version: string,
   platform: NodeJS.Platform,
   arch: WitnessArch
 ): string {
-  if (platform === "win32") {
-    return `https://github.com/in-toto/witness/releases/download/v${version}/witness_${version}_windows_${arch}.zip`;
-  }
-  const os = platform === "darwin" ? "darwin" : "linux";
-  return `https://github.com/in-toto/witness/releases/download/v${version}/witness_${version}_${os}_${arch}.tar.gz`;
+  const base = `https://github.com/in-toto/witness/releases/download/v${version}`;
+  return `${base}/${getArtifactFilename(version, platform, arch)}`;
+}
+
+export function getVerificationURLs(
+  version: string,
+  platform: NodeJS.Platform,
+  arch: WitnessArch
+): { certURL: string; sigURL: string } {
+  const base = `https://github.com/in-toto/witness/releases/download/v${version}`;
+  const filename = getArtifactFilename(version, platform, arch);
+  return {
+    certURL: `${base}/${filename}.pem`,
+    sigURL: `${base}/${filename}.sig`,
+  };
+}
+
+export function computeSha256File(filePath: string): string {
+  const data = fs.readFileSync(filePath);
+  return crypto.createHash("sha256").update(data).digest("hex");
+}
+
+export async function verifyWitnessSignature(
+  archivePath: string,
+  certPem: string,
+  sigBase64: string,
+  certIdentity: string,
+  certIssuer: string
+): Promise<void> {
+  const archiveBytes = fs.readFileSync(archivePath) as Buffer;
+  const digest = crypto.createHash("sha256").update(archiveBytes).digest();
+
+  // Strip PEM headers/footers and whitespace to get raw DER base64
+  const certBase64 = certPem.replace(/-----[A-Z ]+-----/g, "").replace(/\s/g, "");
+
+  const bundle: Bundle = {
+    mediaType: "application/vnd.dev.sigstore.bundle+json;version=0.1",
+    verificationMaterial: {
+      x509CertificateChain: {
+        certificates: [{ rawBytes: certBase64 }],
+      },
+      // Required by OneOf discriminant -- absent alternatives must be undefined
+      certificate: undefined,
+      publicKey: undefined,
+      tlogEntries: [],
+      timestampVerificationData: undefined,
+    },
+    messageSignature: {
+      messageDigest: {
+        algorithm: "SHA2_256",
+        digest: digest.toString("base64"),
+      },
+      signature: sigBase64,
+    },
+    // Required by OneOf discriminant
+    dsseEnvelope: undefined,
+  };
+
+  await sigstoreVerify(bundle, archiveBytes, {
+    certificateIdentityURI: certIdentity,
+    certificateIssuer: certIssuer,
+    // tlog and CT log entries are not included in the legacy cosign artifact format;
+    // cert chain and identity are verified via TUF.
+    tlogThreshold: 0,
+    ctLogThreshold: 0,
+  });
 }
 
 export function buildWitnessArgs(params: WitnessParams): string[] {
@@ -139,12 +219,56 @@ async function run(): Promise<void> {
   let witnessPath = tc.find("witness", version);
   core.info(`Cached Witness path: ${witnessPath || "(not found)"}`);
 
+  if (witnessPath) {
+    const sidecarPath = path.join(witnessPath, "witness.sha256");
+    if (!fs.existsSync(sidecarPath)) {
+      // Cache entry predates SHA verification -- treat as miss and re-download
+      core.info("Cached witness has no SHA sidecar, re-downloading for verification");
+      witnessPath = "";
+    } else {
+      const storedSha = fs.readFileSync(sidecarPath, { encoding: "utf-8" }).trim();
+      const actualSha = computeSha256File(path.join(witnessPath, "witness"));
+      if (storedSha !== actualSha) {
+        core.setFailed(
+          `Cached witness binary failed SHA256 verification. ` +
+          `Expected: ${storedSha}, Got: ${actualSha}. ` +
+          `The runner cache may have been tampered with.`
+        );
+        return;
+      }
+      core.info("Cached witness binary SHA256 verified");
+    }
+  }
+
   if (!witnessPath) {
-    core.info("Witness not found in cache, downloading");
+    const certIdentity = core.getInput("cosign-certificate-identity") ||
+      `https://github.com/in-toto/witness/.github/workflows/release.yml@refs/tags/v${version}`;
+    const certIssuer = core.getInput("cosign-certificate-oidc-issuer") ||
+      "https://token.actions.githubusercontent.com";
+
     const arch = getArch();
     const downloadURL = getDownloadURL(version, process.platform, arch);
+    const { certURL, sigURL } = getVerificationURLs(version, process.platform, arch);
+
+    core.info("Witness not found in cache, downloading");
     core.info(`Downloading witness from: ${downloadURL}`);
-    const witnessDL = await tc.downloadTool(downloadURL);
+
+    const [witnessDL, certPath, sigPath] = await Promise.all([
+      tc.downloadTool(downloadURL),
+      tc.downloadTool(certURL),
+      tc.downloadTool(sigURL),
+    ]);
+
+    core.info("Verifying witness archive with Sigstore");
+    const certPem = fs.readFileSync(certPath, { encoding: "utf-8" });
+    const sigBase64 = fs.readFileSync(sigPath, { encoding: "utf-8" }).trim();
+    try {
+      await verifyWitnessSignature(witnessDL, certPem, sigBase64, certIdentity, certIssuer);
+    } catch (err) {
+      core.setFailed(`Sigstore verification failed: ${(err as Error).message}`);
+      return;
+    }
+    core.info("Sigstore verification passed");
 
     if (!fs.existsSync(witnessInstallDir)) {
       core.info(`Creating witness install directory: ${witnessInstallDir}`);
@@ -152,19 +276,13 @@ async function run(): Promise<void> {
     }
 
     core.info(`Extracting witness to: ${witnessInstallDir}`);
-    if (process.platform === "win32") {
-      witnessPath = await tc.extractZip(witnessDL, witnessInstallDir);
-    } else {
-      witnessPath = await tc.extractTar(witnessDL, witnessInstallDir);
-    }
+    const extractedDir = await tc.extractTar(witnessDL, witnessInstallDir);
 
-    const cachedPath = await tc.cacheFile(
-      path.join(witnessPath, "witness"),
-      "witness",
-      "witness",
-      version
-    );
-    core.info(`Witness cached at: ${cachedPath}`);
+    const binarySha = computeSha256File(path.join(extractedDir, "witness"));
+    fs.writeFileSync(path.join(extractedDir, "witness.sha256"), binarySha);
+
+    witnessPath = await tc.cacheDir(extractedDir, "witness", version);
+    core.info(`Witness cached at: ${witnessPath}`);
   }
 
   core.addPath(witnessPath);
