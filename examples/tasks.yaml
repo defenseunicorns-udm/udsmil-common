@@ -1,4 +1,4 @@
-# Example UDS tasks file for use with udsmil-common shared workflows.
+# Example UDS tasks file for use with udm-common shared workflows.
 #
 # The ci.yaml workflow calls `uds run lint` to produce a Witness attestation.
 # You must define a task named `lint` in your repo's tasks.yaml that runs

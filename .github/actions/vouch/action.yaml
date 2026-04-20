@@ -53,7 +53,8 @@ runs:
   steps:
 
     - name: Install Cosign
-      uses: sigstore/cosign-installer@v4.1.1
+      # sigstore/cosign-installer v4.1.1
+      uses: sigstore/cosign-installer@cad07c2e89fa2edd6e2d7bab4c1aa38e53f76003
 
     - name: OLM CLI Setup
       uses: ./.github/actions/olm-cli-setup
@@ -65,7 +66,7 @@ runs:
       uses: docker/setup-buildx-action@v4.0.0
 
     - name: Witness Build Zarf Package
-      uses: ./src/witness-run
+      uses: ./.github/actions/witness-run
       with:
         step: zarf-create
         enable-archivista: false
