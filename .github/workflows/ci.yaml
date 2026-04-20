@@ -23,14 +23,24 @@ jobs:
       - name: UDS CLI Setup
         uses: ./.github/actions/uds-cli-setup
 
-      - name: Witness Run Lint
-        uses: ./.github/actions/witness-run
+      - name: Cache witness binary
+        # actions/cache v5.0.5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
         with:
-          step: lint
-          enable-archivista: false
-          enable-sigstore: true
-          command: uds run lint
-          outfile: lint-witness.json
+          path: .bin/witness
+          key: witness-0.9.2-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Setup witness
+        run: test -f .bin/witness || scripts/setup-witness.sh
+        shell: bash
+        env:
+          WITNESS_VERSION: 0.9.2
+
+      - name: Lint with attestation
+        run: uds run ci:lint
+        shell: bash
+        env:
+          WITNESS_ENABLE_SIGSTORE: "true"
 
       - name: Upload lint artifacts
         uses: actions/upload-artifact@v7.0.1
@@ -59,37 +69,69 @@ jobs:
           name: lint-artifacts
           path: .
 
-      - name: Security Scan
-        id: scan
-        uses: ./.github/actions/security-scan
+      - name: Setup tools
+        run: uds run setup
+        shell: bash
+        env:
+          WITNESS_VERSION: 0.9.2
+
+      - name: Scan with attestation
+        run: uds run ci:scan --set path=src/
+        shell: bash
+        env:
+          WITNESS_ENABLE_SIGSTORE: "true"
+
+      - name: Build with attestation
+        run: uds run ci:build
+        shell: bash
+        env:
+          WITNESS_ENABLE_SIGSTORE: "true"
+
+      - name: Setup OLM CLI
+        uses: ./.github/actions/olm-cli-setup
         with:
-          opengrep-scan-path: src/
+          username: ${{ secrets.OLM_USER_ID }}
+          password: ${{ secrets.OLM_PASSWORD }}
 
       - name: Vouch
-        uses: ./.github/actions/vouch
+        run: uds run vouch
+        shell: bash
+        env:
+          OLM_CATALOG: ${{ secrets.OLM_CATALOG }}
+          OLM_ORG: ${{ secrets.OLM_ORG }}
+          OLM_USER_ID: ${{ secrets.OLM_USER_ID }}
+          OLM_PASSWORD: ${{ secrets.OLM_PASSWORD }}
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v7.0.1
         with:
-          attestations: ${{ steps.scan.outputs.witness-files }},lint-witness.json
-          sarif-files: ${{ steps.scan.outputs.sarif-files }}
-          olm-catalog: ${{ secrets.OLM_CATALOG }}
-          olm-org: ${{ secrets.OLM_ORG }}
-          olm-user-id: ${{ secrets.OLM_USER_ID }}
-          olm-password: ${{ secrets.OLM_PASSWORD }}
+          name: zarf-package
+          path: zarf-package-*.tar.zst
+
   publish:
     needs: scan-and-vouch
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
+
       - name: Checkout code
         uses: actions/checkout@v6.0.2
 
       - name: UDS CLI Setup
         uses: ./.github/actions/uds-cli-setup
 
-      - name: Publish
-        uses: ./.github/actions/publish
+      - name: Download package artifact
+        uses: actions/download-artifact@v8.0.1
         with:
-          registry: ${{ secrets.REGISTRY_URL }}
-          registry-org: ${{ secrets.REGISTRY_ORG }}
-          registry-user-id: ${{ secrets.REGISTRY_USER_ID }}
-          registry-password: ${{ secrets.REGISTRY_PASSWORD }}
+          name: zarf-package
+          path: .
+
+      - name: Publish
+        run: uds run publish
+        shell: bash
+        env:
+          REGISTRY_URL: ${{ secrets.REGISTRY_URL }}
+          REGISTRY_ORG: ${{ secrets.REGISTRY_ORG }}
+          REGISTRY_USER_ID: ${{ secrets.REGISTRY_USER_ID }}
+          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}

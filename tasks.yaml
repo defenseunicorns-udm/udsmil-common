@@ -1,5 +1,170 @@
 tasks:
 
+  # ── Setup tasks ────────────────────────────────────────────────────────────
+
+  - name: setup
+    description: Install all required tools to .bin/ (witness, gitleaks, opengrep)
+    actions:
+      - task: setup:witness
+      - task: setup:gitleaks
+      - task: setup:opengrep
+
+  - name: setup:witness
+    description: Download witness binary to .bin/ (version matches composite action default)
+    actions:
+      - description: Download witness
+        cmd: scripts/setup-witness.sh
+
+  - name: setup:gitleaks
+    description: Download gitleaks binary to .bin/ (version matches security-scan action default)
+    actions:
+      - description: Download gitleaks
+        shell:
+          linux: bash
+          darwin: bash
+        cmd: |
+          version="8.30.0"
+          mkdir -p .bin
+          os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+          case "$(uname -m)" in
+            x86_64)  arch="x64" ;;
+            aarch64) arch="arm64" ;;
+            arm64)   arch="arm64" ;;
+          esac
+          url="https://github.com/gitleaks/gitleaks/releases/download/v${version}/gitleaks_${version}_${os}_${arch}.tar.gz"
+          curl --fail --silent --show-error --location "$url" | tar -xz -C .bin gitleaks
+          chmod +x .bin/gitleaks
+          echo "Gitleaks ${version} installed to .bin/gitleaks"
+
+  - name: setup:opengrep
+    description: Download opengrep binary to .bin/ (version matches security-scan action default)
+    actions:
+      - description: Download opengrep
+        shell:
+          linux: bash
+          darwin: bash
+        cmd: |
+          version="1.15.1"
+          mkdir -p .bin
+          curl --fail --silent --show-error --location \
+            "https://github.com/opengrep/opengrep/releases/download/v${version}/opengrep_manylinux_x86" \
+            -o .bin/opengrep
+          chmod +x .bin/opengrep
+          echo "OpenGrep ${version} installed to .bin/opengrep"
+
+  - name: setup:olm
+    description: Install OLM CLI. Requires OLM_USER_ID and OLM_PASSWORD env vars.
+    actions:
+      - description: Authenticate and install OLM CLI
+        shell:
+          linux: bash
+          darwin: bash
+        cmd: |
+          registry_url="${OLM_REGISTRY_URL:-registry.uds-mil.us}"
+          version="${OLM_VERSION:-0.1.15-linux}"
+          uds zarf tools registry login -u "$OLM_USER_ID" -p "$OLM_PASSWORD" "$registry_url"
+          # renovate: ignore
+          uds zarf package deploy "oci://${registry_url}/defenseunicorns/olm-installer:${version}" -a amd64 --confirm
+          chmod +x olm
+
+  # ── CI pipeline tasks ──────────────────────────────────────────────────────
+
+  - name: ci
+    description: Run full local CI pipeline (lint + scan + build). Produces unsigned attestations by default; set WITNESS_ENABLE_SIGSTORE=true to sign.
+    actions:
+      - task: ci:lint
+      - task: ci:scan
+      - task: ci:build
+
+  - name: ci:lint
+    description: Run lint under witness attestation
+    actions:
+      - description: Run lint with witness
+        cmd: WITNESS_STEP=lint WITNESS_COMMAND="uds run lint" WITNESS_OUTFILE=lint-witness.json PATH=".bin:$PATH" scripts/witness-run.sh
+
+  - name: ci:scan
+    description: Run all security scans under witness attestation
+    actions:
+      - task: ci:scan-gitleaks
+      - task: ci:scan-opengrep
+
+  - name: ci:scan-gitleaks
+    description: Run gitleaks under witness attestation
+    actions:
+      - description: Run gitleaks with witness
+        cmd: WITNESS_STEP=gitleaks WITNESS_COMMAND="uds run scan:gitleaks" WITNESS_OUTFILE=gitleaks-witness.json PATH=".bin:$PATH" scripts/witness-run.sh
+
+  - name: ci:scan-opengrep
+    description: Run opengrep SAST scan under witness attestation
+    inputs:
+      path:
+        description: Path to scan
+        default: .
+    actions:
+      - description: Run opengrep with witness
+        cmd: WITNESS_STEP=opengrep WITNESS_COMMAND="uds run scan:opengrep --set path=${{ .inputs.path }}" WITNESS_OUTFILE=opengrep-witness.json PATH=".bin:$PATH" scripts/witness-run.sh
+
+  - name: ci:build
+    description: Build Zarf package under witness attestation
+    inputs:
+      architecture:
+        description: Target architecture
+        default: amd64
+      flavor:
+        description: Zarf flavor
+        default: upstream
+      path:
+        description: Path to zarf.yaml
+        default: .
+    actions:
+      - description: Build Zarf package with witness
+        cmd: WITNESS_STEP=zarf-create WITNESS_COMMAND="uds zarf package create ${{ .inputs.path }} --confirm --no-progress --architecture=${{ .inputs.architecture }} --flavor ${{ .inputs.flavor }}" WITNESS_OUTFILE=zarf-create-witness.json PATH=".bin:$PATH" scripts/witness-run.sh
+
+  - name: vouch
+    description: Vouch package via OLM. Requires OLM_CATALOG, OLM_ORG, OLM_USER_ID, OLM_PASSWORD env vars.
+    inputs:
+      attestations:
+        description: Comma-separated witness JSON files
+        default: lint-witness.json,gitleaks-witness.json,opengrep-witness.json,zarf-create-witness.json
+      sarif-files:
+        description: Comma-separated SARIF files
+        default: gitleaks.sarif.json,opengrep.sarif.json
+    actions:
+      - description: Vouch package with OLM
+        shell:
+          linux: bash
+          darwin: bash
+        cmd: |
+          pkg=$(find . -maxdepth 1 -name "zarf-package-*.tar.zst" | head -1)
+          if [[ -z "$pkg" ]]; then
+            echo "No zarf-package-*.tar.zst found. Run 'uds run ci:build' first." >&2
+            exit 1
+          fi
+          ./olm vouch "$pkg" \
+            --cat "$OLM_CATALOG" \
+            --org "$OLM_ORG" \
+            --sarif-evidence "${{ .inputs.sarif-files }}" \
+            --log-level debug \
+            --attestations "${{ .inputs.attestations }}"
+
+  - name: publish
+    description: Publish Zarf package to OCI registry. Requires REGISTRY_URL, REGISTRY_ORG, REGISTRY_USER_ID, REGISTRY_PASSWORD env vars.
+    actions:
+      - description: Publish Zarf package
+        shell:
+          linux: bash
+          darwin: bash
+        cmd: |
+          pkg=$(find . -maxdepth 1 -name "zarf-package-*.tar.zst" | head -1)
+          if [[ -z "$pkg" ]]; then
+            echo "No zarf-package-*.tar.zst found. Run 'uds run ci:build' first." >&2
+            exit 1
+          fi
+          uds zarf tools registry login "$REGISTRY_URL" -u "$REGISTRY_USER_ID" -p "$REGISTRY_PASSWORD"
+          uds zarf package publish "$pkg" "oci://$REGISTRY_URL/$REGISTRY_ORG"
+
+  # ── Scan tasks ─────────────────────────────────────────────────────────────
+
   - name: scan
     description: Run all security scans (gitleaks + opengrep). Mirrors what CI attests separately via witness.
     actions:
@@ -10,17 +175,17 @@ tasks:
     description: Scan for secrets with gitleaks
     actions:
       - description: Run gitleaks
-        cmd: gitleaks dir . --report-format sarif --report-path gitleaks.sarif.json
+        cmd: PATH=".bin:$PATH" gitleaks dir . --report-format sarif --report-path gitleaks.sarif.json
 
   - name: scan:opengrep
     description: Run OpenGrep SAST scan
     inputs:
       path:
         description: Path to scan
-        default: "."
+        default: .
     actions:
       - description: Run opengrep
-        cmd: opengrep scan ${{ .inputs.path }} --sarif --sarif-output opengrep.sarif.json
+        cmd: PATH=".bin:$PATH" opengrep scan ${{ .inputs.path }} --sarif --sarif-output opengrep.sarif.json
 
   # - name: lint
   #   description: Lint YAML files in .github/, src/, and values/ with yamllint
