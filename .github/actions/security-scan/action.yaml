@@ -34,7 +34,7 @@ runs:
   steps:
 
     - name: Install Cosign
-      uses: sigstore/cosign-installer@v4.1.1
+      uses: sigstore/cosign-installer@cad07c2e89fa2edd6e2d7bab4c1aa38e53f76003 # v4.1.1
 
     - name: Install OpenGrep
       if: ${{ inputs.run-opengrep == 'true' }}
