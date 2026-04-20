@@ -32,8 +32,7 @@ runs:
   steps:
 
     - name: Install Cosign
-      # sigstore/cosign-installer v4.1.1
-      uses: sigstore/cosign-installer@cad07c2e89fa2edd6e2d7bab4c1aa38e53f76003
+      uses: sigstore/cosign-installer@v4.1.1
 
     - name: Install OpenGrep
       if: ${{ inputs.run-opengrep == 'true' }}
@@ -64,6 +63,8 @@ runs:
         enable-sigstore: true
         command: opengrep scan ${{ inputs.opengrep-scan-path }} --sarif --sarif-output opengrep.sarif.json
         outfile: opengrep-witness.json
+      env:
+        FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     - name: Witness Run Gitleaks
       uses: ./.github/actions/witness-run
       with:
@@ -72,6 +73,16 @@ runs:
         enable-sigstore: true
         command: gitleaks dir . --report-format sarif --report-path gitleaks.sarif.json
         outfile: gitleaks-witness.json
+
+    - name: Upload gitleaks SARIF for debugging
+      if: failure()
+      # actions/upload-artifact v7.0.1
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: gitleaks-sarif-debug
+        path: gitleaks.sarif.json
+        if-no-files-found: ignore
+
     - name: Collect outputs
       id: collect-outputs
       shell: bash
