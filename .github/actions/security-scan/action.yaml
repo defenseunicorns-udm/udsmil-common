@@ -61,17 +61,15 @@ runs:
         step: opengrep
         enable-archivista: false
         enable-sigstore: true
-        command: opengrep scan ${{ inputs.opengrep-scan-path }} --sarif --sarif-output opengrep.sarif.json
+        command: uds run scan:opengrep --set path=${{ inputs.opengrep-scan-path }}
         outfile: opengrep-witness.json
-      env:
-        FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     - name: Witness Run Gitleaks
       uses: ./.github/actions/witness-run
       with:
         step: gitleaks
         enable-archivista: false
         enable-sigstore: true
-        command: gitleaks dir . --report-format sarif --report-path gitleaks.sarif.json
+        command: uds run scan:gitleaks
         outfile: gitleaks-witness.json
 
     - name: Upload gitleaks SARIF for debugging

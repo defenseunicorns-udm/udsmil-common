@@ -1,5 +1,27 @@
 tasks:
 
+  - name: scan
+    description: Run all security scans (gitleaks + opengrep). Mirrors what CI attests separately via witness.
+    actions:
+      - task: scan:gitleaks
+      - task: scan:opengrep
+
+  - name: scan:gitleaks
+    description: Scan for secrets with gitleaks
+    actions:
+      - description: Run gitleaks
+        cmd: gitleaks dir . --report-format sarif --report-path gitleaks.sarif.json
+
+  - name: scan:opengrep
+    description: Run OpenGrep SAST scan
+    inputs:
+      path:
+        description: Path to scan
+        default: "."
+    actions:
+      - description: Run opengrep
+        cmd: opengrep scan ${{ .inputs.path }} --sarif --sarif-output opengrep.sarif.json
+
   # - name: lint
   #   description: Lint YAML files in .github/, src/, and values/ with yamllint
   #   actions:
