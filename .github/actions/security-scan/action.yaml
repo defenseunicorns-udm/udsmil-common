@@ -9,6 +9,7 @@ inputs:
   opengrep-version:
     description: Version of OpenGrep to install
     required: false
+    # renovate: datasource=github-releases depName=opengrep/opengrep
     default: v1.15.1
   opengrep-scan-path:
     description: Path to scan with OpenGrep. Useful in monorepos to scope SAST to a specific service directory (e.g. 'services/api').
@@ -17,6 +18,7 @@ inputs:
   gitleaks-version:
     description: Version of Gitleaks to install
     required: false
+    # renovate: datasource=github-releases depName=gitleaks/gitleaks extractVersion=^v(?<version>.+)$
     default: 8.30.0
 
 outputs:

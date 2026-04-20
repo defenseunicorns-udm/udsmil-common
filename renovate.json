@@ -1,6 +1,42 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:recommended"
+  "extends": ["config:recommended"],
+  "github-actions": {
+    "fileMatch": ["^examples/ci-example\\.ya?ml$"]
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Update tool versions annotated with '# renovate:' inline comments in YAML files",
+      "fileMatch": ["\\.ya?ml$"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>[a-z-]+) depName=(?<depName>\\S+)(?:\\s+extractVersion=(?<extractVersion>\\S+))?\\s*\\n\\s+default: (?<currentValue>\\S+)"
+      ]
+    },
+    {
+      "customType": "regex",
+      "description": "Update SHA-pinned GitHub Actions references in README.md",
+      "fileMatch": ["^README\\.md$"],
+      "matchStrings": [
+        "uses: (?<depName>[\\w.-]+/[\\w.-]+)[^@\\n]*@(?<currentDigest>[a-f0-9]{40})(?:\\s*#\\s*(?<currentValue>\\S+))?"
+      ],
+      "datasourceTemplate": "github-tags"
+    },
+    {
+      "customType": "regex",
+      "description": "Update version-tagged GitHub Actions references in README.md",
+      "fileMatch": ["^README\\.md$"],
+      "matchStrings": [
+        "uses: (?<depName>[\\w.-]+/[\\w.-]+)@(?<currentValue>v[\\d.]+)"
+      ],
+      "datasourceTemplate": "github-tags"
+    }
+  ],
+  "packageRules": [
+    {
+      "matchDepNames": ["defenseunicorns-udm/udsmil-common"],
+      "groupName": "udsmil-common self-references",
+      "automerge": false
+    }
   ]
 }
