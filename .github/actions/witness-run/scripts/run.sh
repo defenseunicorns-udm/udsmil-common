@@ -156,14 +156,21 @@ eval "declare -a CMD_ARRAY=($WITNESS_COMMAND)"
 # ── Execute ───────────────────────────────────────────────────────────────────
 echo "Running witness in: $FULL_WORK_DIR"
 
-WITNESS_OUTPUT="$(cd "$FULL_WORK_DIR" && witness "${WITNESS_ARGS[@]}" -- "${CMD_ARRAY[@]}" 2>&1)"
-WITNESS_EXIT=$?
+# Stream output live (visible in CI) while also saving to a file for GitOID
+# parsing. set -e is suspended around the execution so a non-zero exit from
+# the attested command is handled explicitly rather than silently aborting the
+# script before any output is printed.
+WITNESS_OUTPUT_FILE="$(mktemp)"
+trap 'rm -f "$WITNESS_OUTPUT_FILE"' EXIT
 
-echo "$WITNESS_OUTPUT"
+set +e
+(cd "$FULL_WORK_DIR" && witness "${WITNESS_ARGS[@]}" -- "${CMD_ARRAY[@]}") 2>&1 | tee "$WITNESS_OUTPUT_FILE"
+WITNESS_EXIT=${PIPESTATUS[0]}
+set -e
 
 if [[ $WITNESS_EXIT -ne 0 ]]; then
   echo "::error::witness run exited with code $WITNESS_EXIT"
-  exit $WITNESS_EXIT
+  exit "$WITNESS_EXIT"
 fi
 
 # ── Extract GitOIDs and write outputs ─────────────────────────────────────────
@@ -174,7 +181,7 @@ while IFS= read -r line; do
       GIT_OIDS+=("${BASH_REMATCH[1]}")
     fi
   fi
-done <<< "$WITNESS_OUTPUT"
+done < "$WITNESS_OUTPUT_FILE"
 
 GIT_OID_CSV="$(IFS=','; echo "${GIT_OIDS[*]}")"
 echo "git_oid=$GIT_OID_CSV" >> "$GITHUB_OUTPUT"
