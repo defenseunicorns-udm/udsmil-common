@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0](https://github.com/defenseunicorns-udm/udm-common/compare/udm-common-v0.1.0...udm-common-v0.2.0) (2026-04-20)
+
+
+### Features
+
+* adding renovate to keep dependencies up to date ([8be405e](https://github.com/defenseunicorns-udm/udm-common/commit/8be405e25715e9c27d788c8b4af60d7b311c0cf1))
+
 ## 0.1.0 (2026-04-17) · 773bb3f554a729e901156bb35e5c343effd1bd47
 
 
