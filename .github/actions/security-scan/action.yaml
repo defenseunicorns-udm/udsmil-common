@@ -19,7 +19,7 @@ inputs:
     description: Version of Gitleaks to install
     required: false
     # renovate: datasource=github-releases depName=gitleaks/gitleaks extractVersion=^v(?<version>.+)$
-    default: 8.30.0
+    default: 8.30.1
 
 outputs:
   witness-files:
