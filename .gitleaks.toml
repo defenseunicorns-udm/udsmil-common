@@ -1,0 +1,6 @@
+[allowlist]
+  description = "Ignore generated CI artifacts — witness attestations and SARIF reports contain embedded file paths and hashes that trigger false positives"
+  paths = [
+    '''.*-witness\.json$''',
+    '''.*\.sarif\.json$''',
+  ]
