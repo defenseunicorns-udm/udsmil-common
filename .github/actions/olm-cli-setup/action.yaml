@@ -7,7 +7,7 @@ inputs:
     default: registry.uds-mil.us
   version:
     description: Version of OLM CLI to install
-    default: 0.1.15-linux
+    default: 0.1.18-linux
   username:
     description: Username for authentication if needed
     required: true
