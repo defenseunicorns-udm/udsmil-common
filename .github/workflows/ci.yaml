@@ -79,7 +79,6 @@ jobs:
           olm-org: ${{ secrets.OLM_ORG }}
           olm-user-id: ${{ secrets.OLM_USER_ID }}
           olm-password: ${{ secrets.OLM_PASSWORD }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
   publish:
     needs: scan-and-vouch
     runs-on: ubuntu-latest
