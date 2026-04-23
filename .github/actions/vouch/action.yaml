@@ -59,7 +59,7 @@ runs:
       uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
 
     - name: Witness Build Zarf Package
-      uses: defenseunicorns-udm/udm-common/.github/actions/witness-run@1ec00936f5c3fcfcc8a3fd4c1b4d2e3b0df104e2 # v0.5.0
+      uses: defenseunicorns-udm/udm-common/.github/actions/witness-run@9cb4474bf099d2a5f054bc2c88c97c1c715f9960 # v0.5.1
       with:
         step: zarf-create
         enable-archivista: false
