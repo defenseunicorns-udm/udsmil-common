@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.0](https://github.com/defenseunicorns-udm/udm-common/compare/v0.5.1...v0.6.0) (2026-04-23)
+
+
+### Features
+
+* update olm action to use ghcr and and move it out of other action ([#45](https://github.com/defenseunicorns-udm/udm-common/issues/45)) ([4128447](https://github.com/defenseunicorns-udm/udm-common/commit/41284478196717f3521c708e6910a3a71ee6dee6))
+
 ## [0.5.1](https://github.com/defenseunicorns-udm/udm-common/compare/v0.5.0...v0.5.1) (2026-04-23)
 
 
