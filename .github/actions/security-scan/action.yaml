@@ -65,7 +65,7 @@ runs:
 
     - name: Witness Run OpenGrep
       if: ${{ inputs.run-opengrep == 'true' }}
-      uses: defenseunicorns-udm/udm-common/.github/actions/witness-run@9cb4474bf099d2a5f054bc2c88c97c1c715f9960 # v0.5.1
+      uses: defenseunicorns-udm/udm-common/.github/actions/witness-run@313297d92b3b10e1d86b18c5861a3099b46b7377 # v0.6.0
       with:
         step: opengrep
         enable-archivista: false
@@ -74,7 +74,7 @@ runs:
         outfile: opengrep-witness.json
 
     - name: Witness Run Gitleaks
-      uses: defenseunicorns-udm/udm-common/.github/actions/witness-run@9cb4474bf099d2a5f054bc2c88c97c1c715f9960 # v0.5.1
+      uses: defenseunicorns-udm/udm-common/.github/actions/witness-run@313297d92b3b10e1d86b18c5861a3099b46b7377 # v0.6.0
       with:
         step: gitleaks
         enable-archivista: false
