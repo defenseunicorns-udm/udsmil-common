@@ -54,7 +54,7 @@ tasks:
             "https://github.com/opengrep/opengrep/releases/download/${VERSION}/opengrep_manylinux_x86"
 
   - name: gitleaks
-    description: Run Gitleaks secrets scan with Witness attestation
+    description: Run Gitleaks secrets scan, optionally wrapped with Witness attestation
     inputs:
       gitleaks_version:
         description: Gitleaks version to install (no v prefix)
@@ -64,6 +64,9 @@ tasks:
         description: Witness version (MAJOR.MINOR.PATCH, no v prefix)
         # renovate: datasource=github-releases depName=in-toto/witness extractVersion=^v(?<version>.+)$
         default: 0.9.2
+      enable_witness:
+        description: Wrap the scan with Witness attestation. Set to 'false' for local runs without a signer.
+        default: "true"
       enable_sigstore:
         description: Sign the attestation with Sigstore/Fulcio. Requires OIDC token (e.g. GitHub Actions).
         default: "false"
@@ -71,7 +74,7 @@ tasks:
         description: Upload the attestation to Archivista.
         default: "false"
     actions:
-      - description: Install tools and run attested Gitleaks scan
+      - description: Install tools and run Gitleaks scan
         shell:
           linux: bash
           darwin: bash
@@ -80,24 +83,27 @@ tasks:
           export PATH="$HOME/.local/bin:$PATH"
 
           uds run scan:install-gitleaks --with version=${{ .inputs.gitleaks_version }}
-          uds run setup:witness --with version=${{ .inputs.witness_version }}
 
-          WITNESS_ARGS=(-a=environment -a=git)
-          if [ "${{ .inputs.enable_sigstore }}" = "true" ]; then
-            WITNESS_ARGS+=(
-              --signer-fulcio-url=https://fulcio.sigstore.dev
-              --signer-fulcio-oidc-client-id=sigstore
-              --signer-fulcio-oidc-issuer=https://oauth2.sigstore.dev/auth
-              --timestamp-servers=https://timestamp.sigstore.dev/api/v1/timestamp
-            )
-          fi
-          WITNESS_ARGS+=(--enable-archivista=${{ .inputs.enable_archivista }})
-
-          witness run "${WITNESS_ARGS[@]}" -s=gitleaks --outfile=gitleaks-witness.json -- \
+          if [ "${{ .inputs.enable_witness }}" = "true" ]; then
+            uds run setup:witness --with version=${{ .inputs.witness_version }}
+            WITNESS_ARGS=(-a=environment -a=git)
+            if [ "${{ .inputs.enable_sigstore }}" = "true" ]; then
+              WITNESS_ARGS+=(
+                --signer-fulcio-url=https://fulcio.sigstore.dev
+                --signer-fulcio-oidc-client-id=sigstore
+                --signer-fulcio-oidc-issuer=https://oauth2.sigstore.dev/auth
+                --timestamp-servers=https://timestamp.sigstore.dev/api/v1/timestamp
+              )
+            fi
+            WITNESS_ARGS+=(--enable-archivista=${{ .inputs.enable_archivista }})
+            witness run "${WITNESS_ARGS[@]}" -s=gitleaks --outfile=gitleaks-witness.json -- \
+              gitleaks dir . --report-format sarif --report-path gitleaks.sarif.json
+          else
             gitleaks dir . --report-format sarif --report-path gitleaks.sarif.json
+          fi
 
   - name: opengrep
-    description: Run OpenGrep SAST scan with Witness attestation (Linux x86_64 only)
+    description: Run OpenGrep SAST scan, optionally wrapped with Witness attestation (Linux x86_64 only)
     inputs:
       opengrep_version:
         description: OpenGrep version to install
@@ -110,6 +116,9 @@ tasks:
         description: Witness version (MAJOR.MINOR.PATCH, no v prefix)
         # renovate: datasource=github-releases depName=in-toto/witness extractVersion=^v(?<version>.+)$
         default: 0.9.2
+      enable_witness:
+        description: Wrap the scan with Witness attestation. Set to 'false' for local runs without a signer.
+        default: "true"
       enable_sigstore:
         description: Sign the attestation with Sigstore/Fulcio. Requires OIDC token (e.g. GitHub Actions).
         default: "false"
@@ -117,7 +126,7 @@ tasks:
         description: Upload the attestation to Archivista.
         default: "false"
     actions:
-      - description: Install tools and run attested OpenGrep scan
+      - description: Install tools and run OpenGrep scan
         shell:
           linux: bash
           darwin: bash
@@ -135,24 +144,27 @@ tasks:
           OPENGREP_SCAN_PATH=${{ .inputs.opengrep_scan_path }}
 
           uds run scan:install-opengrep --with version=${{ .inputs.opengrep_version }}
-          uds run setup:witness --with version=${{ .inputs.witness_version }}
 
-          WITNESS_ARGS=(-a=environment -a=git)
-          if [ "${{ .inputs.enable_sigstore }}" = "true" ]; then
-            WITNESS_ARGS+=(
-              --signer-fulcio-url=https://fulcio.sigstore.dev
-              --signer-fulcio-oidc-client-id=sigstore
-              --signer-fulcio-oidc-issuer=https://oauth2.sigstore.dev/auth
-              --timestamp-servers=https://timestamp.sigstore.dev/api/v1/timestamp
-            )
-          fi
-          WITNESS_ARGS+=(--enable-archivista=${{ .inputs.enable_archivista }})
-
-          witness run "${WITNESS_ARGS[@]}" -s=opengrep --outfile=opengrep-witness.json -- \
+          if [ "${{ .inputs.enable_witness }}" = "true" ]; then
+            uds run setup:witness --with version=${{ .inputs.witness_version }}
+            WITNESS_ARGS=(-a=environment -a=git)
+            if [ "${{ .inputs.enable_sigstore }}" = "true" ]; then
+              WITNESS_ARGS+=(
+                --signer-fulcio-url=https://fulcio.sigstore.dev
+                --signer-fulcio-oidc-client-id=sigstore
+                --signer-fulcio-oidc-issuer=https://oauth2.sigstore.dev/auth
+                --timestamp-servers=https://timestamp.sigstore.dev/api/v1/timestamp
+              )
+            fi
+            WITNESS_ARGS+=(--enable-archivista=${{ .inputs.enable_archivista }})
+            witness run "${WITNESS_ARGS[@]}" -s=opengrep --outfile=opengrep-witness.json -- \
+              opengrep scan "$OPENGREP_SCAN_PATH" --sarif --sarif-output opengrep.sarif.json
+          else
             opengrep scan "$OPENGREP_SCAN_PATH" --sarif --sarif-output opengrep.sarif.json
+          fi
 
   - name: security
-    description: Run Gitleaks and OpenGrep security scans with Witness attestation
+    description: Run Gitleaks and OpenGrep security scans, optionally wrapped with Witness attestation
     inputs:
       gitleaks_version:
         description: Gitleaks version to install (no v prefix)
@@ -169,6 +181,9 @@ tasks:
         description: Witness version (MAJOR.MINOR.PATCH, no v prefix)
         # renovate: datasource=github-releases depName=in-toto/witness extractVersion=^v(?<version>.+)$
         default: 0.9.2
+      enable_witness:
+        description: Wrap scans with Witness attestation. Set to 'false' for local runs without a signer.
+        default: "true"
       enable_sigstore:
         description: Sign attestations with Sigstore/Fulcio. Requires OIDC token (e.g. GitHub Actions).
         default: "false"
@@ -179,7 +194,7 @@ tasks:
         description: Whether to run OpenGrep SAST. Set to 'false' to skip, e.g. when using a different SAST tool.
         default: "true"
     actions:
-      - description: Run Gitleaks and optionally OpenGrep with Witness attestation
+      - description: Run Gitleaks and optionally OpenGrep
         shell:
           linux: bash
           darwin: bash
@@ -191,6 +206,7 @@ tasks:
           OPENGREP_VERSION=${{ .inputs.opengrep_version }}
           OPENGREP_SCAN_PATH=${{ .inputs.opengrep_scan_path }}
           WITNESS_VERSION=${{ .inputs.witness_version }}
+          ENABLE_WITNESS=${{ .inputs.enable_witness }}
           ENABLE_SIGSTORE=${{ .inputs.enable_sigstore }}
           ENABLE_ARCHIVISTA=${{ .inputs.enable_archivista }}
           RUN_OPENGREP=${{ .inputs.run_opengrep }}
@@ -198,6 +214,7 @@ tasks:
           uds run scan:gitleaks \
             --with gitleaks_version="$GITLEAKS_VERSION" \
             --with witness_version="$WITNESS_VERSION" \
+            --with enable_witness="$ENABLE_WITNESS" \
             --with enable_sigstore="$ENABLE_SIGSTORE" \
             --with enable_archivista="$ENABLE_ARCHIVISTA"
 
@@ -206,16 +223,21 @@ tasks:
               --with opengrep_version="$OPENGREP_VERSION" \
               --with opengrep_scan_path="$OPENGREP_SCAN_PATH" \
               --with witness_version="$WITNESS_VERSION" \
+              --with enable_witness="$ENABLE_WITNESS" \
               --with enable_sigstore="$ENABLE_SIGSTORE" \
               --with enable_archivista="$ENABLE_ARCHIVISTA"
           fi
 
           echo "==> Security scan complete"
-          WITNESS_FILES="gitleaks-witness.json"
           SARIF_FILES="gitleaks.sarif.json"
           if [ "$RUN_OPENGREP" = "true" ]; then
-            WITNESS_FILES="${WITNESS_FILES},opengrep-witness.json"
             SARIF_FILES="${SARIF_FILES},opengrep.sarif.json"
           fi
-          echo "Witness attestation files: ${WITNESS_FILES}"
+          if [ "$ENABLE_WITNESS" = "true" ]; then
+            WITNESS_FILES="gitleaks-witness.json"
+            if [ "$RUN_OPENGREP" = "true" ]; then
+              WITNESS_FILES="${WITNESS_FILES},opengrep-witness.json"
+            fi
+            echo "Witness attestation files: ${WITNESS_FILES}"
+          fi
           echo "SARIF files: ${SARIF_FILES}"

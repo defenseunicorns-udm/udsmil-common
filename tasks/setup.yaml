@@ -16,6 +16,11 @@ tasks:
           darwin: bash
         cmd: |
           VERSION=${{ .inputs.version }}
+          TARGET="$HOME/.local/bin/uds"
+          if [ -x "$TARGET" ] && "$TARGET" version 2>/dev/null | grep -qF "${VERSION#v}"; then
+            echo "uds ${VERSION} already installed"
+            exit 0
+          fi
           # shellcheck source=scripts/install.sh
           source scripts/install.sh
           OS_CAP="$(get_os | awk '{print toupper(substr($0,1,1)) tolower(substr($0,2))}')"

@@ -21,12 +21,19 @@ get_arch() {
   esac
 }
 
-# install_binary <name> <url>: downloads a single binary to $HOME/.local/bin
+# install_binary <name> <url>: downloads a single binary to $HOME/.local/bin.
+# Downloads to a temp file first, then renames atomically so the install is
+# safe even when <name> is the currently-executing binary.
 install_binary() {
   local name="$1" url="$2"
   mkdir -p "$HOME/.local/bin"
-  curl -fSL "$url" -o "$HOME/.local/bin/$name"
-  chmod +x "$HOME/.local/bin/$name"
+  local tmp
+  tmp="$(mktemp -p "$HOME/.local/bin" "${name}-XXXXXX")"
+  # shellcheck disable=SC2064
+  trap "rm -f '$tmp'" RETURN
+  curl -fSL "$url" -o "$tmp"
+  chmod +x "$tmp"
+  mv -f "$tmp" "$HOME/.local/bin/$name"
   echo "$name installed to \$HOME/.local/bin/$name"
 }
 
