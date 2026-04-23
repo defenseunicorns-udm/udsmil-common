@@ -1,3 +1,9 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/defenseunicorns/maru-runner/refs/heads/main/tasks.schema.json
+
+includes:
+  - setup: ./tasks/setup.yaml
+  - scan: ./tasks/scan.yaml
+
 tasks:
 
   # - name: lint
@@ -116,6 +122,48 @@ tasks:
             fi
           done
           shopt -u nullglob #reset nullglob behavior
+  - name: test
+    description: Run integration tests for all locally executable tasks
+    actions:
+      - description: Test setup and scan tasks
+        shell:
+          linux: bash
+          darwin: bash
+        cmd: |
+          set -euo pipefail
+          export PATH="$HOME/.local/bin:$PATH"
+
+          echo "==> Testing setup:uds-cli"
+          uds run setup:uds-cli
+          test -x "$HOME/.local/bin/uds" || { echo "FAIL: setup:uds-cli did not install uds to \$HOME/.local/bin"; exit 1; }
+          echo "PASS: setup:uds-cli"
+
+          echo "==> Testing setup:cosign"
+          uds run setup:cosign
+          command -v cosign > /dev/null 2>&1 || { echo "FAIL: setup:cosign did not make cosign available on PATH"; exit 1; }
+          echo "PASS: setup:cosign"
+
+          echo "==> Testing setup:witness (verify_sigstore=false)"
+          uds run setup:witness --with verify_sigstore=false
+          test -x "$HOME/.local/bin/witness" || { echo "FAIL: setup:witness did not install witness to \$HOME/.local/bin"; exit 1; }
+          echo "PASS: setup:witness"
+
+          echo "==> Testing scan:install-gitleaks"
+          uds run scan:install-gitleaks
+          test -x "$HOME/.local/bin/gitleaks" || { echo "FAIL: scan:install-gitleaks did not install gitleaks to \$HOME/.local/bin"; exit 1; }
+          echo "PASS: scan:install-gitleaks"
+
+          echo "==> Testing scan:install-opengrep (Linux x86_64 only)"
+          if [ "$(uname -s)" = "Linux" ] && [ "$(uname -m)" = "x86_64" ]; then
+            uds run scan:install-opengrep
+            test -x "$HOME/.local/bin/opengrep" || { echo "FAIL: scan:install-opengrep did not install opengrep to \$HOME/.local/bin"; exit 1; }
+            echo "PASS: scan:install-opengrep"
+          else
+            echo "SKIP: scan:install-opengrep (not Linux x86_64)"
+          fi
+
+          echo "All tests passed."
+
   - name: tasks
     description: Dry run all tasks in the base tasks file
     actions:

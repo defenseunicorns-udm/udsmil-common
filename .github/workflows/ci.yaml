@@ -38,6 +38,22 @@ jobs:
           name: lint-artifacts
           path: lint-witness.json
 
+  test-tasks:
+    needs: lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: UDS CLI Setup
+        uses: ./.github/actions/uds-cli-setup
+
+      - name: Run task integration tests
+        run: uds run test
+
   scan-and-vouch:
     needs: lint
     runs-on: ubuntu-latest
@@ -60,16 +76,17 @@ jobs:
           path: .
 
       - name: Security Scan
-        id: scan
-        uses: ./.github/actions/security-scan
-        with:
-          opengrep-scan-path: src/
+        run: |
+          uds run scan:security \
+            --with enable_sigstore=true \
+            --with enable_archivista=false \
+            --with opengrep_scan_path=src/
 
       - name: Vouch
         uses: ./.github/actions/vouch
         with:
-          attestations: ${{ steps.scan.outputs.witness-files }},lint-witness.json
-          sarif-files: ${{ steps.scan.outputs.sarif-files }}
+          attestations: gitleaks-witness.json,opengrep-witness.json,lint-witness.json
+          sarif-files: gitleaks.sarif.json,opengrep.sarif.json
           olm-catalog: ${{ secrets.OLM_CATALOG }}
           olm-org: ${{ secrets.OLM_ORG }}
           olm-user-id: ${{ secrets.OLM_USER_ID }}

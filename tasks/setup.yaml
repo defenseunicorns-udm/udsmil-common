@@ -1,0 +1,182 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/defenseunicorns/maru-runner/refs/heads/main/tasks.schema.json
+
+tasks:
+
+  - name: uds-cli
+    description: Download and install UDS CLI to $HOME/.local/bin
+    inputs:
+      version:
+        description: Version of UDS CLI to install
+        # renovate: datasource=github-releases depName=defenseunicorns/uds-cli
+        default: v0.30.3
+    actions:
+      - description: Install UDS CLI
+        shell:
+          linux: bash
+          darwin: bash
+        cmd: |
+          VERSION=${{ .inputs.version }}
+          INSTALL_DIR="$HOME/.local/bin"
+          TARGET="$INSTALL_DIR/uds"
+
+          if [ -x "$TARGET" ] && "$TARGET" version 2>/dev/null | grep -qF "${VERSION#v}"; then
+            echo "uds ${VERSION} already installed"
+            exit 0
+          fi
+
+          # shellcheck source=scripts/install.sh
+          source scripts/install.sh
+          OS_CAP="$(get_os | awk '{print toupper(substr($0,1,1)) tolower(substr($0,2))}')"
+          ARCH="$(get_arch)"
+
+          mkdir -p "$INSTALL_DIR"
+          TMPFILE="$(mktemp -p "$INSTALL_DIR" uds-XXXXXX)"
+          # shellcheck disable=SC2064
+          trap "rm -f '$TMPFILE'" EXIT
+          curl --retry-all-errors --retry 5 -fSL \
+            "https://github.com/defenseunicorns/uds-cli/releases/download/${VERSION}/uds-cli_${VERSION}_${OS_CAP}_${ARCH}" \
+            -o "$TMPFILE"
+          chmod +x "$TMPFILE"
+          mv -f "$TMPFILE" "$TARGET"
+          echo "UDS CLI ${VERSION} installed to $TARGET"
+          echo "Ensure $INSTALL_DIR is on your PATH."
+
+  - name: cosign
+    description: Install cosign to $HOME/.local/bin if not already present
+    inputs:
+      version:
+        description: Version of cosign to install (no v prefix)
+        # renovate: datasource=github-releases depName=sigstore/cosign extractVersion=^v(?<version>.+)$
+        default: 2.5.0
+    actions:
+      - description: Install cosign
+        shell:
+          linux: bash
+          darwin: bash
+        cmd: |
+          if command -v cosign > /dev/null 2>&1; then
+            echo "cosign already installed: $(cosign version 2>/dev/null | head -1 || true)"
+            exit 0
+          fi
+          VERSION=${{ .inputs.version }}
+          # shellcheck source=scripts/install.sh
+          source scripts/install.sh
+          OS="$(get_os)"
+          ARCH="$(get_arch)"
+          install_binary cosign \
+            "https://github.com/sigstore/cosign/releases/download/v${VERSION}/cosign-${OS}-${ARCH}"
+
+  - name: witness
+    description: Download, verify, and install Witness CLI to $HOME/.local/bin. Uses a SHA256 cache to avoid re-downloading on repeat runs.
+    inputs:
+      version:
+        description: Witness version (MAJOR.MINOR.PATCH, no v prefix)
+        # renovate: datasource=github-releases depName=in-toto/witness extractVersion=^v(?<version>.+)$
+        default: 0.9.2
+      verify_sigstore:
+        description: Verify the witness binary with cosign before installing. Requires cosign on PATH or setup:cosign to have run first.
+        default: "true"
+      cosign_version:
+        description: Version of cosign to install if not already on PATH and verify_sigstore is true (no v prefix)
+        # renovate: datasource=github-releases depName=sigstore/cosign extractVersion=^v(?<version>.+)$
+        default: 2.5.0
+    actions:
+      - description: Ensure cosign is available, then download and verify witness
+        shell:
+          linux: bash
+          darwin: bash
+        cmd: |
+          VERSION=${{ .inputs.version }}
+          VERIFY=${{ .inputs.verify_sigstore }}
+          COSIGN_VERSION=${{ .inputs.cosign_version }}
+          INSTALL_DIR="$HOME/.local/bin"
+          CACHE_DIR="$HOME/.cache/witness/${VERSION}"
+          SIDECAR="${CACHE_DIR}/witness.sha256"
+          CACHED_BIN="${CACHE_DIR}/witness"
+
+          # Install cosign if not already present and verification is requested
+          if [ "$VERIFY" = "true" ] && ! command -v cosign > /dev/null 2>&1; then
+            COSIGN_OS="$(uname -s)"
+            COSIGN_ARCH="$(uname -m)"
+            case "$COSIGN_OS" in
+              Linux)
+                case "$COSIGN_ARCH" in
+                  x86_64)  COSIGN_BIN="cosign-linux-amd64" ;;
+                  aarch64) COSIGN_BIN="cosign-linux-arm64" ;;
+                  *) echo "Unsupported architecture: $COSIGN_ARCH"; exit 1 ;;
+                esac
+                ;;
+              Darwin)
+                case "$COSIGN_ARCH" in
+                  x86_64) COSIGN_BIN="cosign-darwin-amd64" ;;
+                  arm64)  COSIGN_BIN="cosign-darwin-arm64" ;;
+                  *) echo "Unsupported architecture: $COSIGN_ARCH"; exit 1 ;;
+                esac
+                ;;
+              *) echo "Unsupported OS: $COSIGN_OS"; exit 1 ;;
+            esac
+            mkdir -p "$INSTALL_DIR"
+            curl -fSL \
+              "https://github.com/sigstore/cosign/releases/download/v${COSIGN_VERSION}/${COSIGN_BIN}" \
+              -o "$INSTALL_DIR/cosign"
+            chmod +x "$INSTALL_DIR/cosign"
+          fi
+          export PATH="$INSTALL_DIR:$PATH"
+
+          OS="$(uname -s)"
+          ARCH="$(uname -m)"
+          case "$OS" in
+            Linux)  PLATFORM="linux" ;;
+            Darwin) PLATFORM="darwin" ;;
+            *) echo "Unsupported OS: $OS"; exit 1 ;;
+          esac
+          case "$ARCH" in
+            x86_64)        ARCH_NAME="amd64" ;;
+            aarch64|arm64) ARCH_NAME="arm64" ;;
+            *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
+          esac
+
+          ARTIFACT="witness_${VERSION}_${PLATFORM}_${ARCH_NAME}.tar.gz"
+          RELEASE_BASE="https://github.com/in-toto/witness/releases/download/v${VERSION}"
+
+          # Re-use cache if SHA256 sidecar matches
+          if [ -f "$CACHED_BIN" ] && [ -f "$SIDECAR" ]; then
+            STORED="$(cat "$SIDECAR")"
+            ACTUAL="$(sha256sum "$CACHED_BIN" | awk '{print $1}')"
+            if [ "$STORED" = "$ACTUAL" ]; then
+              echo "Using cached witness ${VERSION}"
+              mkdir -p "$INSTALL_DIR"
+              cp "$CACHED_BIN" "$INSTALL_DIR/witness"
+              chmod +x "$INSTALL_DIR/witness"
+              exit 0
+            fi
+          fi
+
+          TEMP_DIR="$(mktemp -d)"
+          # shellcheck disable=SC2064
+          trap "rm -rf '$TEMP_DIR'" EXIT
+
+          echo "Downloading witness ${VERSION} (${PLATFORM}/${ARCH_NAME})"
+          curl -fSL "${RELEASE_BASE}/${ARTIFACT}" -o "${TEMP_DIR}/${ARTIFACT}"
+
+          if [ "$VERIFY" = "true" ]; then
+            curl -fSL "${RELEASE_BASE}/${ARTIFACT}.pem" -o "${TEMP_DIR}/${ARTIFACT}.pem"
+            curl -fSL "${RELEASE_BASE}/${ARTIFACT}.sig" -o "${TEMP_DIR}/${ARTIFACT}.sig"
+            CERT_IDENTITY="https://github.com/in-toto/witness/.github/workflows/release.yml@refs/tags/v${VERSION}"
+            cosign verify-blob \
+              --certificate       "${TEMP_DIR}/${ARTIFACT}.pem" \
+              --signature         "${TEMP_DIR}/${ARTIFACT}.sig" \
+              --certificate-identity "$CERT_IDENTITY" \
+              --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+              "${TEMP_DIR}/${ARTIFACT}"
+            echo "Sigstore verification passed"
+          fi
+
+          mkdir -p "$CACHE_DIR"
+          tar -xzf "${TEMP_DIR}/${ARTIFACT}" -C "$CACHE_DIR"
+          sha256sum "$CACHE_DIR/witness" | awk '{print $1}' > "$SIDECAR"
+
+          mkdir -p "$INSTALL_DIR"
+          cp "$CACHE_DIR/witness" "$INSTALL_DIR/witness"
+          chmod +x "$INSTALL_DIR/witness"
+          echo "Witness ${VERSION} installed to ${INSTALL_DIR}/witness"
