@@ -5,7 +5,7 @@ inputs:
   run-opengrep:
     description: Whether to run OpenGrep SAST scanning. Set to 'false' to skip entirely, e.g. when using a different SAST tool and passing its output via external attestations.
     required: false
-    default: 'true'
+    default: "true"
   opengrep-version:
     description: Version of OpenGrep to install
     required: false
