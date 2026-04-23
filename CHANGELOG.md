@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.1](https://github.com/defenseunicorns-udm/udm-common/compare/v0.4.0...v0.4.1) (2026-04-22)
+
+
+### Bug Fixes
+
+* update OLM CLI to v0.1.18 and add Renovate tracking ([f17da45](https://github.com/defenseunicorns-udm/udm-common/commit/f17da459b08b7b20f81a62655060ea4fdf525c50))
+* update olm version ([ad9d7d8](https://github.com/defenseunicorns-udm/udm-common/commit/ad9d7d89b9fe6374871be077c32ec264cfa789d8))
+
 ## [0.4.0](https://github.com/defenseunicorns-udm/udm-common/compare/v0.3.0...v0.4.0) (2026-04-21)
 
 

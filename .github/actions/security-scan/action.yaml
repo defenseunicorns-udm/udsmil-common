@@ -10,7 +10,7 @@ inputs:
     description: Version of OpenGrep to install
     required: false
     # renovate: datasource=github-releases depName=opengrep/opengrep
-    default: v1.19.0
+    default: v1.20.0
   opengrep-scan-path:
     description: Path to scan with OpenGrep. Useful in monorepos to scope SAST to a specific service directory (e.g. 'services/api').
     required: false
