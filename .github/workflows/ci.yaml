@@ -65,6 +65,11 @@ jobs:
         with:
           opengrep-scan-path: src/
 
+      - name: OLM CLI Setup
+        uses: ./.github/actions/olm-cli-setup
+        with:
+          github-token: ${{ inputs.github-token }}
+
       - name: Vouch
         uses: ./.github/actions/vouch
         with:
@@ -74,6 +79,7 @@ jobs:
           olm-org: ${{ secrets.OLM_ORG }}
           olm-user-id: ${{ secrets.OLM_USER_ID }}
           olm-password: ${{ secrets.OLM_PASSWORD }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
   publish:
     needs: scan-and-vouch
     runs-on: ubuntu-latest

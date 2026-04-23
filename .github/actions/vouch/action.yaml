@@ -42,6 +42,9 @@ inputs:
     description: Path to the test directory to pass to olm vouch. Leave empty to skip the --test-directory flag entirely.
     required: false
     default: tests
+  github-token:
+    description: The GITHUB_TOKEN secret
+    required: true
 
 outputs:
   zarf-package:
@@ -54,12 +57,6 @@ runs:
 
     - name: Install Cosign
       uses: sigstore/cosign-installer@cad07c2e89fa2edd6e2d7bab4c1aa38e53f76003 # v4.1.1
-
-    - name: OLM CLI Setup
-      uses: defenseunicorns-udm/udm-common/.github/actions/olm-cli-setup@1ec00936f5c3fcfcc8a3fd4c1b4d2e3b0df104e2 # v0.5.0
-      with:
-        username: ${{ inputs.olm-user-id }}
-        password: ${{ inputs.olm-password }}
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
