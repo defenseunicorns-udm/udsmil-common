@@ -5,7 +5,7 @@ inputs:
   run-opengrep:
     description: Whether to run OpenGrep SAST scanning. Set to 'false' to skip entirely, e.g. when using a different SAST tool and passing its output via external attestations.
     required: false
-    default: true
+    default: 'true'
   opengrep-version:
     description: Version of OpenGrep to install
     required: false
@@ -58,7 +58,7 @@ runs:
 
     - name: Witness Run OpenGrep
       if: ${{ inputs.run-opengrep == 'true' }}
-      uses: ./.github/actions/witness-run
+      uses: defenseunicorns-udm/udm-common/.github/actions/witness-run@5cfa823c83826b155f3d30369a4d8d717e8a8717 # v0.4.1
       with:
         step: opengrep
         enable-archivista: false
@@ -67,7 +67,7 @@ runs:
         outfile: opengrep-witness.json
 
     - name: Witness Run Gitleaks
-      uses: ./.github/actions/witness-run
+      uses: defenseunicorns-udm/udm-common/.github/actions/witness-run@5cfa823c83826b155f3d30369a4d8d717e8a8717 # v0.4.1
       with:
         step: gitleaks
         enable-archivista: false

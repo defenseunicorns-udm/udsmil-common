@@ -5,7 +5,10 @@
     "helpers:pinGitHubActionDigests"
   ],
   "github-actions": {
-    "fileMatch": ["^examples/ci-example\\.ya?ml$"]
+    "fileMatch": [
+      "^examples/ci-example\\.ya?ml$",
+      "^\\.github/actions/.*\\.ya?ml$"
+    ]
   },
   "customManagers": [
     {
