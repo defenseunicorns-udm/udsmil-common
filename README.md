@@ -56,7 +56,10 @@ jobs:
       id-token: write
     steps:
         uses: actions/checkout@v6.0.2
-      - uses: defenseunicorns-udm/udm-common/.github/actions/uds-cli-setup@9cb4474bf099d2a5f054bc2c88c97c1c715f9960 # v0.5.1
+      - uses: defenseunicorns-udm/udm-common/.github/actions/uds-cli-setup@1ec00936f5c3fcfcc8a3fd4c1b4d2e3b0df104e2 # v0.5.0
+      - uses: defenseunicorns-udm/udm-common/.github/actions/olm-cli-setup@1ec00936f5c3fcfcc8a3fd4c1b4d2e3b0df104e2 # v0.5.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/download-artifact@v8.0.1
         with:
           name: lint-artifacts
