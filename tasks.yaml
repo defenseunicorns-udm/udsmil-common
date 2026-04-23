@@ -1,8 +1,3 @@
-# yaml-language-server: $schema=https://raw.githubusercontent.com/defenseunicorns/maru-runner/refs/heads/main/tasks.schema.json
-
-includes:
-  - setup: ./tasks/setup.yaml
-
 tasks:
 
   # - name: lint
