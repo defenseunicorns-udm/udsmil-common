@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.1](https://github.com/defenseunicorns-udm/udm-common/compare/v0.5.0...v0.5.1) (2026-04-23)
+
+
+### Bug Fixes
+
+* **actions:** replace local refs in composite actions with fully-qualified external refs ([8efb182](https://github.com/defenseunicorns-udm/udm-common/commit/8efb182edf3a908e8e6b68fa0c56d15295aa4d44))
+
 ## [0.5.0](https://github.com/defenseunicorns-udm/udm-common/compare/v0.4.1...v0.5.0) (2026-04-23)
 
 
