@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.0](https://github.com/defenseunicorns-udm/udm-common/compare/v0.4.1...v0.5.0) (2026-04-23)
+
+
+### Features
+
+* **tasks:** add setup:uds-cli task for local UDS CLI installation ([182c216](https://github.com/defenseunicorns-udm/udm-common/commit/182c21619a060baa842d05ded66d954519b4155b))
+
 ## [0.4.1](https://github.com/defenseunicorns-udm/udm-common/compare/v0.4.0...v0.4.1) (2026-04-22)
 
 
