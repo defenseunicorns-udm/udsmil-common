@@ -20,7 +20,7 @@ publishes Zarf packages to the UDS MIL registry.
 Reference actions and workflows from this repo using the full path and a ref:
 
 ```yaml
-uses: defenseunicorns-udm/udm-common/.github/actions/security-scan@5cfa823c83826b155f3d30369a4d8d717e8a8717 # v0.4.1
+uses: defenseunicorns-udm/udm-common/.github/actions/security-scan@1ec00936f5c3fcfcc8a3fd4c1b4d2e3b0df104e2 # v0.5.0
 ```
 
 ### Minimal CI workflow
@@ -34,7 +34,7 @@ jobs:
       id-token: write
     steps:
         uses: actions/checkout@v6.0.2
-      - uses: defenseunicorns-udm/udm-common/.github/actions/uds-cli-setup@5cfa823c83826b155f3d30369a4d8d717e8a8717 # v0.4.1
+      - uses: defenseunicorns-udm/udm-common/.github/actions/uds-cli-setup@1ec00936f5c3fcfcc8a3fd4c1b4d2e3b0df104e2 # v0.5.0
       - uses: testifysec/witness-run-action@7aa15e327829f1f2a523365c564c948d5dde69dd
         with:
           step: lint
@@ -56,14 +56,14 @@ jobs:
       id-token: write
     steps:
         uses: actions/checkout@v6.0.2
-      - uses: defenseunicorns-udm/udm-common/.github/actions/uds-cli-setup@5cfa823c83826b155f3d30369a4d8d717e8a8717 # v0.4.1
+      - uses: defenseunicorns-udm/udm-common/.github/actions/uds-cli-setup@1ec00936f5c3fcfcc8a3fd4c1b4d2e3b0df104e2 # v0.5.0
       - uses: actions/download-artifact@v8.0.1
         with:
           name: lint-artifacts
           path: .
       - id: scan
-        uses: defenseunicorns-udm/udm-common/.github/actions/security-scan@5cfa823c83826b155f3d30369a4d8d717e8a8717 # v0.4.1
-      - uses: defenseunicorns-udm/udm-common/.github/actions/vouch@5cfa823c83826b155f3d30369a4d8d717e8a8717 # v0.4.1
+        uses: defenseunicorns-udm/udm-common/.github/actions/security-scan@1ec00936f5c3fcfcc8a3fd4c1b4d2e3b0df104e2 # v0.5.0
+      - uses: defenseunicorns-udm/udm-common/.github/actions/vouch@1ec00936f5c3fcfcc8a3fd4c1b4d2e3b0df104e2 # v0.5.0
         with:
           attestations: "${{ steps.scan.outputs.witness-files }},lint-witness.json"
           sarif-files: "${{ steps.scan.outputs.sarif-files }}"
@@ -79,8 +79,8 @@ jobs:
       contents: read
     steps:
         uses: actions/checkout@v6.0.2
-      - uses: defenseunicorns-udm/udm-common/.github/actions/uds-cli-setup@5cfa823c83826b155f3d30369a4d8d717e8a8717 # v0.4.1
-      - uses: defenseunicorns-udm/udm-common/.github/actions/publish@5cfa823c83826b155f3d30369a4d8d717e8a8717 # v0.4.1
+      - uses: defenseunicorns-udm/udm-common/.github/actions/uds-cli-setup@1ec00936f5c3fcfcc8a3fd4c1b4d2e3b0df104e2 # v0.5.0
+      - uses: defenseunicorns-udm/udm-common/.github/actions/publish@1ec00936f5c3fcfcc8a3fd4c1b4d2e3b0df104e2 # v0.5.0
         with:
           registry: registry.uds-mil.us
           registry-org: <your-org-name>
@@ -100,10 +100,10 @@ jobs:
         service: [api, worker, frontend]
     steps:
       - id: scan
-        uses: defenseunicorns-udm/udm-common/.github/actions/security-scan@5cfa823c83826b155f3d30369a4d8d717e8a8717 # v0.4.1
+        uses: defenseunicorns-udm/udm-common/.github/actions/security-scan@1ec00936f5c3fcfcc8a3fd4c1b4d2e3b0df104e2 # v0.5.0
         with:
           opengrep-scan-path: services/${{ matrix.service }}
-      - uses: defenseunicorns-udm/udm-common/.github/actions/vouch@5cfa823c83826b155f3d30369a4d8d717e8a8717 # v0.4.1
+      - uses: defenseunicorns-udm/udm-common/.github/actions/vouch@1ec00936f5c3fcfcc8a3fd4c1b4d2e3b0df104e2 # v0.5.0
         with:
           attestations: "${{ steps.scan.outputs.witness-files }}"
           sarif-files: "${{ steps.scan.outputs.sarif-files }}"
