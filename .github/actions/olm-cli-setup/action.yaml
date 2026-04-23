@@ -7,7 +7,8 @@ inputs:
     default: registry.uds-mil.us
   version:
     description: Version of OLM CLI to install
-    default: 0.1.15-linux
+    # renovate: datasource=github-releases depName=defenseunicorns/uds-dot-mil extractVersion=^olm-(?<version>.+)$
+    default: 0.1.18
   username:
     description: Username for authentication if needed
     required: true
@@ -32,6 +33,5 @@ runs:
         VERSION: ${{ inputs.version }}
         REGISTRY_URL: ${{ inputs.registry_url }}
       run: |
-        # renovate: ignore
-        uds zarf package deploy oci://${REGISTRY_URL}/defenseunicorns/olm-installer:${VERSION} -a amd64 --confirm
+        uds zarf package deploy oci://${REGISTRY_URL}/defenseunicorns/olm-installer:${VERSION}-linux -a amd64 --confirm
         chmod +x olm
