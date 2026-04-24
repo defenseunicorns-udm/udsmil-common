@@ -67,6 +67,9 @@ tasks:
         description: Witness version (MAJOR.MINOR.PATCH, no v prefix)
         # renovate: datasource=github-releases depName=in-toto/witness extractVersion=^v(?<version>.+)$
         default: 0.9.2
+      witness_key_path:
+        description: Path to a local signing key for Witness. Use for local runs when enable_sigstore=false. Leave empty in CI (Sigstore is used instead).
+        default: ""
       enable_sigstore:
         description: Sign the attestation with Sigstore/Fulcio. Requires OIDC token (e.g. GitHub Actions).
         default: "false"
@@ -83,6 +86,7 @@ tasks:
           export PATH="$HOME/.local/bin:$PATH"
 
           GITLEAKS_SCAN_PATH=${{ .inputs.gitleaks_scan_path }}
+          WITNESS_KEY_PATH=${{ .inputs.witness_key_path }}
 
           uds run scan:install-gitleaks --with version=${{ .inputs.gitleaks_version }}
           uds run setup:witness --with version=${{ .inputs.witness_version }}
@@ -95,6 +99,9 @@ tasks:
               --signer-fulcio-oidc-issuer=https://oauth2.sigstore.dev/auth
               --timestamp-servers=https://timestamp.sigstore.dev/api/v1/timestamp
             )
+          fi
+          if [ -n "$WITNESS_KEY_PATH" ]; then
+            WITNESS_ARGS+=(--signer-file-key-path "$WITNESS_KEY_PATH")
           fi
           WITNESS_ARGS+=(--enable-archivista=${{ .inputs.enable_archivista }})
 
@@ -115,6 +122,9 @@ tasks:
         description: Witness version (MAJOR.MINOR.PATCH, no v prefix)
         # renovate: datasource=github-releases depName=in-toto/witness extractVersion=^v(?<version>.+)$
         default: 0.9.2
+      witness_key_path:
+        description: Path to a local signing key for Witness. Use for local runs when enable_sigstore=false. Leave empty in CI (Sigstore is used instead).
+        default: ""
       enable_sigstore:
         description: Sign the attestation with Sigstore/Fulcio. Requires OIDC token (e.g. GitHub Actions).
         default: "false"
@@ -138,6 +148,7 @@ tasks:
           fi
 
           OPENGREP_SCAN_PATH=${{ .inputs.opengrep_scan_path }}
+          WITNESS_KEY_PATH=${{ .inputs.witness_key_path }}
 
           uds run scan:install-opengrep --with version=${{ .inputs.opengrep_version }}
           uds run setup:witness --with version=${{ .inputs.witness_version }}
@@ -150,6 +161,9 @@ tasks:
               --signer-fulcio-oidc-issuer=https://oauth2.sigstore.dev/auth
               --timestamp-servers=https://timestamp.sigstore.dev/api/v1/timestamp
             )
+          fi
+          if [ -n "$WITNESS_KEY_PATH" ]; then
+            WITNESS_ARGS+=(--signer-file-key-path "$WITNESS_KEY_PATH")
           fi
           WITNESS_ARGS+=(--enable-archivista=${{ .inputs.enable_archivista }})
 
@@ -177,6 +191,9 @@ tasks:
         description: Witness version (MAJOR.MINOR.PATCH, no v prefix)
         # renovate: datasource=github-releases depName=in-toto/witness extractVersion=^v(?<version>.+)$
         default: 0.9.2
+      witness_key_path:
+        description: Path to a local signing key for Witness. Use for local runs when enable_sigstore=false. Leave empty in CI (Sigstore is used instead).
+        default: ""
       enable_sigstore:
         description: Sign attestations with Sigstore/Fulcio. Requires OIDC token (e.g. GitHub Actions).
         default: "false"
@@ -200,6 +217,7 @@ tasks:
           OPENGREP_VERSION=${{ .inputs.opengrep_version }}
           OPENGREP_SCAN_PATH=${{ .inputs.opengrep_scan_path }}
           WITNESS_VERSION=${{ .inputs.witness_version }}
+          WITNESS_KEY_PATH=${{ .inputs.witness_key_path }}
           ENABLE_SIGSTORE=${{ .inputs.enable_sigstore }}
           ENABLE_ARCHIVISTA=${{ .inputs.enable_archivista }}
           RUN_OPENGREP=${{ .inputs.run_opengrep }}
@@ -208,6 +226,7 @@ tasks:
             --with gitleaks_version="$GITLEAKS_VERSION" \
             --with gitleaks_scan_path="$GITLEAKS_SCAN_PATH" \
             --with witness_version="$WITNESS_VERSION" \
+            --with witness_key_path="$WITNESS_KEY_PATH" \
             --with enable_sigstore="$ENABLE_SIGSTORE" \
             --with enable_archivista="$ENABLE_ARCHIVISTA"
 
@@ -216,6 +235,7 @@ tasks:
               --with opengrep_version="$OPENGREP_VERSION" \
               --with opengrep_scan_path="$OPENGREP_SCAN_PATH" \
               --with witness_version="$WITNESS_VERSION" \
+              --with witness_key_path="$WITNESS_KEY_PATH" \
               --with enable_sigstore="$ENABLE_SIGSTORE" \
               --with enable_archivista="$ENABLE_ARCHIVISTA"
           fi

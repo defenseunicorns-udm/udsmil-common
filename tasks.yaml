@@ -166,6 +166,26 @@ tasks:
             echo "SKIP: scan:install-opengrep (not Linux x86_64)"
           fi
 
+          echo "==> Testing scan:security (ephemeral key)"
+          WITNESS_TEST_KEY=$(mktemp --suffix=.pem)
+          openssl genpkey -algorithm ED25519 -out "$WITNESS_TEST_KEY" 2>/dev/null
+          rm -f gitleaks.sarif.json gitleaks-witness.json opengrep.sarif.json opengrep-witness.json
+          uds run scan:security \
+            --with enable_sigstore=false \
+            --with enable_archivista=false \
+            --with witness_key_path="$WITNESS_TEST_KEY"
+          rm -f "$WITNESS_TEST_KEY"
+          test -s gitleaks.sarif.json || { echo "FAIL: gitleaks.sarif.json not created or empty"; exit 1; }
+          test -s gitleaks-witness.json || { echo "FAIL: gitleaks-witness.json not created or empty"; exit 1; }
+          echo "PASS: scan:gitleaks produced output files"
+          if [ "$(uname -s)" = "Linux" ] && [ "$(uname -m)" = "x86_64" ]; then
+            test -s opengrep.sarif.json || { echo "FAIL: opengrep.sarif.json not created or empty"; exit 1; }
+            test -s opengrep-witness.json || { echo "FAIL: opengrep-witness.json not created or empty"; exit 1; }
+            echo "PASS: scan:opengrep produced output files"
+          fi
+          rm -f gitleaks.sarif.json gitleaks-witness.json opengrep.sarif.json opengrep-witness.json
+          echo "PASS: scan:security"
+
           echo "All tests passed."
 
   - name: tasks
@@ -193,6 +213,9 @@ tasks:
       run_opengrep:
         description: Whether to run OpenGrep SAST. Set to 'false' to skip.
         default: "true"
+      witness_key_path:
+        description: Path to a local signing key for Witness. Use for local runs when enable_sigstore=false. Leave empty in CI (Sigstore is used instead).
+        default: ""
       olm_catalog:
         description: OLM catalog hostname
         default: ""
@@ -235,14 +258,16 @@ tasks:
           set -euo pipefail
           export PATH="$HOME/.local/bin:$PATH"
 
+          EXTRA_ATTESTATIONS=${{ .inputs.extra_attestations }}
+          WITNESS_KEY_PATH=${{ .inputs.witness_key_path }}
+
           uds run scan:security \
             --with gitleaks_scan_path="${{ .inputs.gitleaks_scan_path }}" \
             --with opengrep_scan_path="${{ .inputs.opengrep_scan_path }}" \
             --with run_opengrep="${{ .inputs.run_opengrep }}" \
+            --with witness_key_path="$WITNESS_KEY_PATH" \
             --with enable_sigstore="${{ .inputs.enable_sigstore }}" \
             --with enable_archivista="${{ .inputs.enable_archivista }}"
-
-          EXTRA_ATTESTATIONS=${{ .inputs.extra_attestations }}
           SARIF_FILES="gitleaks.sarif.json"
           SCAN_ATTESTATIONS="gitleaks-witness.json"
           if [ "${{ .inputs.run_opengrep }}" = "true" ]; then
