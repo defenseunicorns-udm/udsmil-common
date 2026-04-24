@@ -56,6 +56,11 @@ jobs:
       - name: UDS CLI Setup
         uses: defenseunicorns-udm/udm-common/.github/actions/uds-cli-setup@610c5df804615ab16d2ecf631825dfdcb723eb57 # v0.2.0
 
+      - name: OLM CLI Setup
+        uses: defenseunicorns-udm/udm-common/.github/actions/olm-cli-setup@1ec00936f5c3fcfcc8a3fd4c1b4d2e3b0df104e2 # v0.5.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Download lint artifacts
         uses: actions/download-artifact@v8.0.1
         with:

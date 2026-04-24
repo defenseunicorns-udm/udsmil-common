@@ -55,17 +55,11 @@ runs:
     - name: Install Cosign
       uses: sigstore/cosign-installer@cad07c2e89fa2edd6e2d7bab4c1aa38e53f76003 # v4.1.1
 
-    - name: OLM CLI Setup
-      uses: defenseunicorns-udm/udm-common/.github/actions/olm-cli-setup@9cb4474bf099d2a5f054bc2c88c97c1c715f9960 # v0.5.1
-      with:
-        username: ${{ inputs.olm-user-id }}
-        password: ${{ inputs.olm-password }}
-
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
 
     - name: Witness Build Zarf Package
-      uses: defenseunicorns-udm/udm-common/.github/actions/witness-run@9cb4474bf099d2a5f054bc2c88c97c1c715f9960 # v0.5.1
+      uses: defenseunicorns-udm/udm-common/.github/actions/witness-run@313297d92b3b10e1d86b18c5861a3099b46b7377 # v0.6.0
       with:
         step: zarf-create
         enable-archivista: false
