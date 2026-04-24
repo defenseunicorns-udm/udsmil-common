@@ -56,11 +56,6 @@ jobs:
       - name: UDS CLI Setup
         uses: defenseunicorns-udm/udm-common/.github/actions/uds-cli-setup@610c5df804615ab16d2ecf631825dfdcb723eb57 # v0.2.0
 
-      - name: OLM CLI Setup
-        uses: defenseunicorns-udm/udm-common/.github/actions/olm-cli-setup@1ec00936f5c3fcfcc8a3fd4c1b4d2e3b0df104e2 # v0.5.0
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Download lint artifacts
         uses: actions/download-artifact@v8.0.1
         with:
@@ -74,12 +69,11 @@ jobs:
       - name: Vouch
         uses: defenseunicorns-udm/udm-common/.github/actions/vouch@610c5df804615ab16d2ecf631825dfdcb723eb57 # v0.2.0
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           attestations: ${{ steps.scan.outputs.witness-files }},lint-witness.json
           sarif-files: ${{ steps.scan.outputs.sarif-files }}
           olm-catalog: cat-api.uds-mil.us
           olm-org: uds-army-demo
-          olm-user-id: ${{ secrets.OLM_USER_ID }}
-          olm-password: ${{ secrets.OLM_PASSWORD }}
 
   publish:
     needs: scan-and-vouch

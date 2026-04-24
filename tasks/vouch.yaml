@@ -17,19 +17,13 @@ tasks:
       olm_org:
         description: OLM organization name
         default: ""
-      olm_user_id:
-        description: OLM registry username
-        default: ""
-      olm_password:
-        description: OLM registry password
-        default: ""
       olm_version:
         description: Version of OLM CLI to install
         # renovate: datasource=github-releases depName=defenseunicorns/uds-dot-mil extractVersion=^olm-(?<version>.+)$
-        default: 0.1.18
-      olm_registry_url:
-        description: URL of the OLM registry
-        default: registry.uds-mil.us
+        default: 0.1.19
+      github_token:
+        description: GitHub token for GHCR authentication. Pass secrets.GITHUB_TOKEN in CI. Leave empty locally — the package is publicly accessible.
+        default: ""
       zarf_path:
         description: Path to the directory containing zarf.yaml
         default: .
@@ -66,10 +60,8 @@ tasks:
           TEST_DIRECTORY=${{ .inputs.test_directory }}
 
           uds run olm:setup \
-            --with registry_url="${{ .inputs.olm_registry_url }}" \
             --with version="${{ .inputs.olm_version }}" \
-            --with username="${{ .inputs.olm_user_id }}" \
-            --with password="${{ .inputs.olm_password }}"
+            --with github_token="${{ .inputs.github_token }}"
 
           uds run build:zarf-package \
             --with zarf_path="${{ .inputs.zarf_path }}" \

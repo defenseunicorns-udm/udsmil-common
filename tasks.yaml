@@ -216,17 +216,14 @@ tasks:
       witness_key_path:
         description: Path to a local signing key for Witness. Use for local runs when enable_sigstore=false. Leave empty in CI (Sigstore is used instead).
         default: ""
+      github_token:
+        description: GitHub token for OLM CLI installation from GHCR. Pass secrets.GITHUB_TOKEN in CI. Leave empty locally.
+        default: ""
       olm_catalog:
         description: OLM catalog hostname
         default: ""
       olm_org:
         description: OLM organization name
-        default: ""
-      olm_user_id:
-        description: OLM registry username
-        default: ""
-      olm_password:
-        description: OLM registry password
         default: ""
       zarf_path:
         description: Path to the directory containing zarf.yaml
@@ -285,10 +282,9 @@ tasks:
             --with architecture="${{ .inputs.architecture }}" \
             --with flavor="${{ .inputs.flavor }}" \
             --with test_directory="${{ .inputs.test_directory }}" \
+            --with github_token="${{ .inputs.github_token }}" \
             --with olm_catalog="${{ .inputs.olm_catalog }}" \
             --with olm_org="${{ .inputs.olm_org }}" \
-            --with olm_user_id="${{ .inputs.olm_user_id }}" \
-            --with olm_password="${{ .inputs.olm_password }}" \
             --with attestations="${ALL_EXTRA}" \
             --with sarif_files="${SARIF_FILES}" \
             --with enable_sigstore="${{ .inputs.enable_sigstore }}" \
@@ -306,17 +302,14 @@ tasks:
       run_opengrep:
         description: Whether to run OpenGrep SAST. Set to 'false' to skip.
         default: "true"
+      github_token:
+        description: GitHub token for OLM CLI installation from GHCR. Pass secrets.GITHUB_TOKEN in CI. Leave empty locally.
+        default: ""
       olm_catalog:
         description: OLM catalog hostname
         default: ""
       olm_org:
         description: OLM organization name
-        default: ""
-      olm_user_id:
-        description: OLM registry username
-        default: ""
-      olm_password:
-        description: OLM registry password
         default: ""
       registry:
         description: OCI registry to publish to
@@ -361,10 +354,9 @@ tasks:
             --with gitleaks_scan_path="${{ .inputs.gitleaks_scan_path }}" \
             --with opengrep_scan_path="${{ .inputs.opengrep_scan_path }}" \
             --with run_opengrep="${{ .inputs.run_opengrep }}" \
+            --with github_token="${{ .inputs.github_token }}" \
             --with olm_catalog="${{ .inputs.olm_catalog }}" \
             --with olm_org="${{ .inputs.olm_org }}" \
-            --with olm_user_id="${{ .inputs.olm_user_id }}" \
-            --with olm_password="${{ .inputs.olm_password }}" \
             --with zarf_path="${{ .inputs.zarf_path }}" \
             --with architecture="${{ .inputs.architecture }}" \
             --with flavor="${{ .inputs.flavor }}" \

@@ -10,17 +10,15 @@ inputs:
     description: Comma-separated list of SARIF files to include as evidence (e.g. outputs from security-scan plus any external SARIF files)
     required: false
     default: ""
+  github-token:
+    description: GitHub token for OLM CLI installation from GHCR. Recommended in CI to avoid rate limits (pass secrets.GITHUB_TOKEN). Optional for local use.
+    required: false
+    default: ""
   olm-catalog:
     description: OLM catalog hostname
     required: true
   olm-org:
     description: OLM organization name
-    required: true
-  olm-user-id:
-    description: OLM registry username
-    required: true
-  olm-password:
-    description: OLM registry password
     required: true
   zarf-architecture:
     description: Target architecture for the Zarf package
@@ -78,10 +76,9 @@ runs:
         (cd "$UDM_ROOT" && uds run vouch:package \
           --with enable_sigstore=true \
           --with enable_archivista=false \
+          --with github_token="${{ inputs.github-token }}" \
           --with olm_catalog="${{ inputs.olm-catalog }}" \
           --with olm_org="${{ inputs.olm-org }}" \
-          --with olm_user_id="${{ inputs.olm-user-id }}" \
-          --with olm_password="${{ inputs.olm-password }}" \
           --with attestations="${{ inputs.attestations }}" \
           --with sarif_files="${{ inputs.sarif-files }}" \
           --with test_directory="$TEST_DIR" \
