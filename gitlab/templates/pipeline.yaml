@@ -6,13 +6,16 @@
 # This template owns:  scan → vouch → publish
 #
 # Caller must provide a lint job that:
-#   1. Is named "lint" (or set UDM_LINT_JOB to its actual name)
+#   1. Runs in a stage named "lint" declared before "udm-scan" in stages:
 #   2. Runs `uds run lint:attest --with cmd="<your lint command>"`
 #      (lint:attest lives in udm-common/tasks/lint.yaml — include it in
 #       your tasks.yaml and it handles Witness automatically)
 #   3. Uploads lint-witness.json as an artifact
 #
-# See udm-example for a complete reference implementation.
+# Artifacts from earlier stages are passed automatically by GitLab, so
+# lint-witness.json will be available to udm:scan without any `needs:`
+# cross-file reference (which GitLab validates statically and rejects
+# when the job is defined in a separately included file).
 #
 # ─────────────────────────────────────────────────────────────────────────────
 # Usage
@@ -26,7 +29,7 @@
 #     UDM_COMMON_REF: "v0.6.0"
 #
 #   stages:
-#     - lint              # caller defines this stage and its job(s)
+#     - lint              # caller defines this stage — must come before udm-scan
 #     - udm-scan
 #     - udm-vouch-publish
 #
@@ -40,8 +43,6 @@
 #  REGISTRY_USER_ID      yes       OCI registry username.
 #  REGISTRY_PASSWORD     yes       OCI registry password.
 #  UDM_COMMON_REF        yes       Git ref matching the tag in the include URL.
-#  UDM_LINT_JOB          no        Name of the caller's lint job.
-#                                  Default: "lint"
 #  UDM_REGISTRY          no        OCI registry host. Default: registry.uds-mil.us
 #  UDM_REGISTRY_ORG      no        Registry org. Default: $UDM_OLM_ORG
 #  UDM_OLM_CATALOG       no        OLM catalog host. Empty = skip OLM vouch.
@@ -99,11 +100,10 @@
 udm:scan:
   extends: .udm-base
   stage: udm-scan
-  needs:
-    - job: $UDM_LINT_JOB
-      artifacts: true
-  variables:
-    UDM_LINT_JOB: lint
+  # No `needs:` here — stage ordering guarantees lint runs first and
+  # GitLab automatically passes artifacts from prior stages to later ones.
+  # Using `needs: [lint]` would require the job name to be known at parse
+  # time, which fails when the job is defined in a separate included file.
   script:
     - |
       set -euo pipefail
@@ -138,10 +138,7 @@ udm:generate-app-pipeline:
   needs:
     - job: udm:scan
       artifacts: true
-    - job: $UDM_LINT_JOB
-      artifacts: true
-  variables:
-    UDM_LINT_JOB: lint
+  # lint artifacts flow automatically via stage ordering (lint → udm-scan → udm-vouch-publish)
   script:
     - |
       set -euo pipefail
