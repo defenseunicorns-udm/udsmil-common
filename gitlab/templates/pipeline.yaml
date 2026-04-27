@@ -42,7 +42,7 @@
 #  UDM_APPS              yes       Space-separated app dir names under apps/.
 #  REGISTRY_USER_ID      yes       OCI registry username.
 #  REGISTRY_PASSWORD     yes       OCI registry password.
-#  UDM_COMMON_REF        yes       Git ref matching the tag in the include URL.
+#  UDM_COMMON_REF        yes       Git ref matching the include URL.
 #  UDM_REGISTRY          no        OCI registry host. Default: registry.uds-mil.us
 #  UDM_REGISTRY_ORG      no        Registry org. Default: $UDM_OLM_ORG
 #  UDM_OLM_CATALOG       no        OLM catalog host. Empty = skip OLM vouch.
@@ -85,15 +85,15 @@
     set -euo pipefail
     if [ -z "${UDM_COMMON_REF:-}" ]; then
       echo "ERROR: UDM_COMMON_REF is not set."
-      echo "Set it to the same tag/SHA used in the include: remote: URL."
+      echo "Set it to the same Git ref used in the include: remote: URL."
       exit 1
     fi
     if [ ! -d /opt/udm-common/.git ]; then
-      git clone \
+      git clone --depth 1 --no-checkout \
         https://github.com/defenseunicorns-udm/udm-common.git \
         /opt/udm-common
-      git -C /opt/udm-common fetch origin "${UDM_COMMON_REF}"
-      git -C /opt/udm-common checkout "${UDM_COMMON_REF}"
+      git -C /opt/udm-common fetch --depth 1 origin "${UDM_COMMON_REF}"
+      git -C /opt/udm-common checkout --detach FETCH_HEAD
     fi
 
 .udm-base:
@@ -192,11 +192,9 @@ udm:generate-app-pipeline:
           - |
             set -euo pipefail
             if [ ! -d /opt/udm-common/.git ]; then
-              git clone --depth 1 \\
-                https://github.com/defenseunicorns-udm/udm-common.git \\
-                /opt/udm-common
+              git clone --depth 1 --no-checkout https://github.com/defenseunicorns-udm/udm-common.git /opt/udm-common
               git -C /opt/udm-common fetch --depth 1 origin "${UDM_REF}"
-              git -C /opt/udm-common checkout "${UDM_REF}"
+              git -C /opt/udm-common checkout --detach FETCH_HEAD
             fi
       HEADER
 
