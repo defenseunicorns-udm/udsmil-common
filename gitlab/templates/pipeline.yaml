@@ -210,7 +210,7 @@ udm:generate-app-pipeline:
           OLM_IDENTITY_TOKEN:
             aud: "${OLM_TOKEN_AUDIENCE}"
           GITLAB_OIDC:
-            aud: "sigstore"
+            aud: "chainloop"
         script:
           - |
             set -euo pipefail
