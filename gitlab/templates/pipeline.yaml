@@ -91,9 +91,9 @@
     if [ ! -d /opt/udm-common/.git ]; then
       git clone \
         https://github.com/defenseunicorns-udm/udm-common.git \
-        /tmp/udm-common
-      git -C /tmp/udm-common fetch origin "${UDM_COMMON_REF}"
-      git -C /tmp/udm-common checkout "${UDM_COMMON_REF}"
+        /opt/udm-common
+      git -C /opt/udm-common fetch origin "${UDM_COMMON_REF}"
+      git -C /opt/udm-common checkout "${UDM_COMMON_REF}"
     fi
 
 .udm-base:
