@@ -7,7 +7,7 @@ tasks:
     inputs:
       registry:
         description: OCI registry to publish to (e.g. registry.uds-mil.us)
-        default: ""
+        default: registry.uds-mil.us
       registry_org:
         description: Organization path within the registry
         default: ""

@@ -86,7 +86,6 @@ jobs:
       - name: Publish
         uses: defenseunicorns-udm/udm-common/.github/actions/publish@9cb4474bf099d2a5f054bc2c88c97c1c715f9960 # v0.5.1
         with:
-          registry: registry.uds-mil.us
           registry-org: <your-org-name>
           registry-user-id: ${{ secrets.REGISTRY_USER_ID }}
           registry-password: ${{ secrets.REGISTRY_PASSWORD }}

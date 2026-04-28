@@ -4,7 +4,8 @@ description: Publishes a vouched Zarf package to an OCI registry.
 inputs:
   registry:
     description: OCI registry to publish to (e.g. registry.uds-mil.us)
-    required: true
+    required: false
+    default: registry.uds-mil.us
   registry-org:
     description: Organization path within the registry (e.g. uds-army-demo)
     required: true

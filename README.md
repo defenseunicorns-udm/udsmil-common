@@ -79,7 +79,6 @@ jobs:
       - uses: defenseunicorns-udm/udm-common/.github/actions/uds-cli-setup@313297d92b3b10e1d86b18c5861a3099b46b7377 # v0.6.0
       - uses: defenseunicorns-udm/udm-common/.github/actions/publish@313297d92b3b10e1d86b18c5861a3099b46b7377 # v0.6.0
         with:
-          registry: registry.uds-mil.us
           registry-org: <your-org-name>
           registry-user-id: ${{ secrets.REGISTRY_USER_ID }}
           registry-password: ${{ secrets.REGISTRY_PASSWORD }}
