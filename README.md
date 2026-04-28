@@ -38,8 +38,6 @@ jobs:
       - uses: testifysec/witness-run-action@7aa15e327829f1f2a523365c564c948d5dde69dd
         with:
           step: lint
-          enable-archivista: false
-          enable-sigstore: true
           command: uds run lint        # defined in your tasks.yaml
           outfile: lint-witness.json
         uses: actions/upload-artifact@v7.0.1

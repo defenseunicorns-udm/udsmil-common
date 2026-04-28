@@ -147,8 +147,8 @@ tasks:
           command -v cosign > /dev/null 2>&1 || { echo "FAIL: setup:cosign did not make cosign available on PATH"; exit 1; }
           echo "PASS: setup:cosign"
 
-          echo "==> Testing setup:witness (verify_sigstore=false)"
-          uds run setup:witness --with verify_sigstore=false
+          echo "==> Testing setup:witness"
+          uds run setup:witness
           test -x "$HOME/.local/bin/witness" || { echo "FAIL: setup:witness did not install witness to \$HOME/.local/bin"; exit 1; }
           echo "PASS: setup:witness"
 

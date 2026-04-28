@@ -29,8 +29,6 @@ jobs:
         uses: defenseunicorns-udm/udm-common/.github/actions/witness-run@9cb4474bf099d2a5f054bc2c88c97c1c715f9960 # v0.5.1
         with:
           step: lint
-          enable-archivista: false
-          enable-sigstore: true
           command: uds run lint
           outfile: lint-witness.json
 

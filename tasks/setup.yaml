@@ -73,11 +73,8 @@ tasks:
         description: Witness version (MAJOR.MINOR.PATCH, no v prefix)
         # renovate: datasource=github-releases depName=in-toto/witness extractVersion=^v(?<version>.+)$
         default: 0.9.2
-      verify_sigstore:
-        description: Verify the witness binary with cosign before installing. Requires cosign on PATH or setup:cosign to have run first.
-        default: "true"
       cosign_version:
-        description: Version of cosign to install if not already on PATH and verify_sigstore is true (no v prefix)
+        description: Version of cosign to install if not already on PATH (no v prefix)
         # renovate: datasource=github-releases depName=sigstore/cosign extractVersion=^v(?<version>.+)$
         default: 2.5.0
     actions:
@@ -87,15 +84,14 @@ tasks:
           darwin: bash
         cmd: |
           VERSION=${{ .inputs.version }}
-          VERIFY=${{ .inputs.verify_sigstore }}
           COSIGN_VERSION=${{ .inputs.cosign_version }}
           INSTALL_DIR="$HOME/.local/bin"
           CACHE_DIR="$HOME/.cache/witness/${VERSION}"
           SIDECAR="${CACHE_DIR}/witness.sha256"
           CACHED_BIN="${CACHE_DIR}/witness"
 
-          # Install cosign if not already present and verification is requested
-          if [ "$VERIFY" = "true" ] && ! command -v cosign > /dev/null 2>&1; then
+          # Install cosign if not already present.
+          if ! command -v cosign > /dev/null 2>&1; then
             COSIGN_OS="$(uname -s)"
             COSIGN_ARCH="$(uname -m)"
             case "$COSIGN_OS" in
@@ -159,18 +155,16 @@ tasks:
           echo "Downloading witness ${VERSION} (${PLATFORM}/${ARCH_NAME})"
           curl -fSL "${RELEASE_BASE}/${ARTIFACT}" -o "${TEMP_DIR}/${ARTIFACT}"
 
-          if [ "$VERIFY" = "true" ]; then
-            curl -fSL "${RELEASE_BASE}/${ARTIFACT}.pem" -o "${TEMP_DIR}/${ARTIFACT}.pem"
-            curl -fSL "${RELEASE_BASE}/${ARTIFACT}.sig" -o "${TEMP_DIR}/${ARTIFACT}.sig"
-            CERT_IDENTITY="https://github.com/in-toto/witness/.github/workflows/release.yml@refs/tags/v${VERSION}"
-            cosign verify-blob \
-              --certificate       "${TEMP_DIR}/${ARTIFACT}.pem" \
-              --signature         "${TEMP_DIR}/${ARTIFACT}.sig" \
-              --certificate-identity "$CERT_IDENTITY" \
-              --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-              "${TEMP_DIR}/${ARTIFACT}"
-            echo "Sigstore verification passed"
-          fi
+          curl -fSL "${RELEASE_BASE}/${ARTIFACT}.pem" -o "${TEMP_DIR}/${ARTIFACT}.pem"
+          curl -fSL "${RELEASE_BASE}/${ARTIFACT}.sig" -o "${TEMP_DIR}/${ARTIFACT}.sig"
+          CERT_IDENTITY="https://github.com/in-toto/witness/.github/workflows/release.yml@refs/tags/v${VERSION}"
+          cosign verify-blob \
+            --certificate       "${TEMP_DIR}/${ARTIFACT}.pem" \
+            --signature         "${TEMP_DIR}/${ARTIFACT}.sig" \
+            --certificate-identity "$CERT_IDENTITY" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "${TEMP_DIR}/${ARTIFACT}"
+          echo "Sigstore verification passed"
 
           mkdir -p "$CACHE_DIR"
           tar -xzf "${TEMP_DIR}/${ARTIFACT}" -C "$CACHE_DIR"
