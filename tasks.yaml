@@ -193,7 +193,7 @@ tasks:
     actions:
       - description: Dry run tasks
         cmd: |
-          tasks=$(uds run --list=md | tail -n +3 | awk -F '|' '{gsub("\\*\\*", "", $2); print $2}')
+          tasks=$(./uds run --list=md | tail -n +3 | awk -F '|' '{gsub("\\*\\*", "", $2); print $2}')
 
           # Loop through each command and execute with --dry-run
           for task in $tasks; do
