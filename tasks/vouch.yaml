@@ -11,8 +11,8 @@ tasks:
       sarif_files:
         description: Comma-separated list of SARIF files to include as evidence
         default: ""
-      olm_catalog:
-        description: OLM catalog hostname
+      olm_cat:
+        description: Domain of the CAT instance
         default: ""
       olm_org:
         description: OLM organization name
@@ -64,7 +64,7 @@ tasks:
           ATTESTATIONS="${{ .inputs.attestations }}"
           SARIF_FILES="${{ .inputs.sarif_files }}"
           TEST_DIRECTORY="${{ .inputs.test_directory }}"
-          OLM_CATALOG="${{ .inputs.olm_catalog }}"
+          OLM_CAT="${{ .inputs.olm_cat }}"
           OLM_ORG="${{ .inputs.olm_org }}"
 
           uds run build:zarf-package \
@@ -82,7 +82,7 @@ tasks:
             echo "No zarf-package-*.tar.zst file found after build."
             exit 1
           fi
-          if [ -z "$OLM_CATALOG" ]; then
+          if [ -z "$OLM_CAT" ]; then
             echo "No OLM catalog configured. Skipping OLM vouch for local run."
             exit 0
           fi
@@ -130,8 +130,8 @@ tasks:
           fi
 
           OLM_ARGS=()
-          if [ -n "$OLM_CATALOG" ]; then
-            OLM_ARGS+=(--cat "$OLM_CATALOG")
+          if [ -n "$OLM_CAT" ]; then
+            OLM_ARGS+=(--cat "$OLM_CAT")
           fi
           if [ -n "$OLM_ORG" ]; then
             OLM_ARGS+=(--org "$OLM_ORG")

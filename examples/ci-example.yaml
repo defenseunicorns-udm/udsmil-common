@@ -68,7 +68,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           attestations: ${{ steps.scan.outputs.witness-files }},lint-witness.json
           sarif-files: ${{ steps.scan.outputs.sarif-files }}
-          olm-catalog: cat-api.uds-mil.us
+          olm-cat: cat-api.uds-mil.us
           olm-org: <your-org-name>
 
   publish:

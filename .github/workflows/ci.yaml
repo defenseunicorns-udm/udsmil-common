@@ -91,7 +91,7 @@ jobs:
             --with enable_sigstore=true \
             --with enable_archivista=false \
             --with github_token="${{ secrets.GITHUB_TOKEN }}" \
-            --with olm_catalog="${{ secrets.OLM_CATALOG }}" \
+            --with olm_cat="${{ secrets.OLM_CAT }}" \
             --with olm_org="${{ secrets.OLM_ORG }}" \
             --with attestations="gitleaks-witness.json,opengrep-witness.json,lint-witness.json" \
             --with sarif_files="gitleaks.sarif.json,opengrep.sarif.json"

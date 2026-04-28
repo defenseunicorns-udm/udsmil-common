@@ -77,7 +77,7 @@ runs:
           --with enable_sigstore=true \
           --with enable_archivista=false \
           --with github_token="${{ inputs.github-token }}" \
-          --with olm_catalog="${{ inputs.olm-catalog }}" \
+          --with olm_cat="${{ inputs.olm-cat }}" \
           --with olm_org="${{ inputs.olm-org }}" \
           --with attestations="${{ inputs.attestations }}" \
           --with sarif_files="${{ inputs.sarif-files }}" \
