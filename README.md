@@ -33,14 +33,14 @@ jobs:
       contents: read
       id-token: write
     steps:
-        uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v6.0.2
       - uses: defenseunicorns-udm/udm-common/.github/actions/uds-cli-setup@313297d92b3b10e1d86b18c5861a3099b46b7377 # v0.6.0
       - uses: testifysec/witness-run-action@7aa15e327829f1f2a523365c564c948d5dde69dd
         with:
           step: lint
           command: uds run lint        # defined in your tasks.yaml
           outfile: lint-witness.json
-        uses: actions/upload-artifact@v7.0.1
+      - uses: actions/upload-artifact@v7.0.1
         with:
           name: lint-artifacts
           path: lint-witness.json
@@ -53,7 +53,7 @@ jobs:
       packages: write
       id-token: write
     steps:
-        uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v6.0.2
       - uses: defenseunicorns-udm/udm-common/.github/actions/uds-cli-setup@313297d92b3b10e1d86b18c5861a3099b46b7377 # v0.6.0
       - uses: actions/download-artifact@v8.0.1
         with:
@@ -75,7 +75,7 @@ jobs:
     permissions:
       contents: read
     steps:
-        uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v6.0.2
       - uses: defenseunicorns-udm/udm-common/.github/actions/uds-cli-setup@313297d92b3b10e1d86b18c5861a3099b46b7377 # v0.6.0
       - uses: defenseunicorns-udm/udm-common/.github/actions/publish@313297d92b3b10e1d86b18c5861a3099b46b7377 # v0.6.0
         with:
