@@ -1,3 +1,13 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/defenseunicorns/maru-runner/refs/heads/main/tasks.schema.json
+
+includes:
+  - setup: ./tasks/setup.yaml
+  - scan: ./tasks/scan.yaml
+  - build: ./tasks/build.yaml
+  - olm: ./tasks/olm.yaml
+  - vouch: ./tasks/vouch.yaml
+  - publish: ./tasks/publish.yaml
+
 tasks:
 
   # - name: lint
@@ -116,6 +126,68 @@ tasks:
             fi
           done
           shopt -u nullglob #reset nullglob behavior
+  - name: test
+    description: Run integration tests for all locally executable tasks
+    actions:
+      - description: Test setup and scan tasks
+        shell:
+          linux: bash
+          darwin: bash
+        cmd: |
+          set -euo pipefail
+          export PATH="$HOME/.local/bin:$PATH"
+
+          echo "==> Testing setup:uds-cli"
+          uds run setup:uds-cli
+          test -x "$HOME/.local/bin/uds" || { echo "FAIL: setup:uds-cli did not install uds to \$HOME/.local/bin"; exit 1; }
+          echo "PASS: setup:uds-cli"
+
+          echo "==> Testing setup:cosign"
+          uds run setup:cosign
+          command -v cosign > /dev/null 2>&1 || { echo "FAIL: setup:cosign did not make cosign available on PATH"; exit 1; }
+          echo "PASS: setup:cosign"
+
+          echo "==> Testing setup:witness"
+          uds run setup:witness
+          test -x "$HOME/.local/bin/witness" || { echo "FAIL: setup:witness did not install witness to \$HOME/.local/bin"; exit 1; }
+          echo "PASS: setup:witness"
+
+          echo "==> Testing scan:install-gitleaks"
+          uds run scan:install-gitleaks
+          test -x "$HOME/.local/bin/gitleaks" || { echo "FAIL: scan:install-gitleaks did not install gitleaks to \$HOME/.local/bin"; exit 1; }
+          echo "PASS: scan:install-gitleaks"
+
+          echo "==> Testing scan:install-opengrep (Linux x86_64 only)"
+          if [ "$(uname -s)" = "Linux" ] && [ "$(uname -m)" = "x86_64" ]; then
+            uds run scan:install-opengrep
+            test -x "$HOME/.local/bin/opengrep" || { echo "FAIL: scan:install-opengrep did not install opengrep to \$HOME/.local/bin"; exit 1; }
+            echo "PASS: scan:install-opengrep"
+          else
+            echo "SKIP: scan:install-opengrep (not Linux x86_64)"
+          fi
+
+          echo "==> Testing scan:security (ephemeral key)"
+          WITNESS_TEST_KEY=$(mktemp --suffix=.pem)
+          openssl genpkey -algorithm ED25519 -out "$WITNESS_TEST_KEY" 2>/dev/null
+          rm -f gitleaks.sarif.json gitleaks-witness.json opengrep.sarif.json opengrep-witness.json
+          uds run scan:security \
+            --with enable_sigstore=false \
+            --with enable_archivista=false \
+            --with witness_key_path="$WITNESS_TEST_KEY"
+          rm -f "$WITNESS_TEST_KEY"
+          test -s gitleaks.sarif.json || { echo "FAIL: gitleaks.sarif.json not created or empty"; exit 1; }
+          test -s gitleaks-witness.json || { echo "FAIL: gitleaks-witness.json not created or empty"; exit 1; }
+          echo "PASS: scan:gitleaks produced output files"
+          if [ "$(uname -s)" = "Linux" ] && [ "$(uname -m)" = "x86_64" ]; then
+            test -s opengrep.sarif.json || { echo "FAIL: opengrep.sarif.json not created or empty"; exit 1; }
+            test -s opengrep-witness.json || { echo "FAIL: opengrep-witness.json not created or empty"; exit 1; }
+            echo "PASS: scan:opengrep produced output files"
+          fi
+          rm -f gitleaks.sarif.json gitleaks-witness.json opengrep.sarif.json opengrep-witness.json
+          echo "PASS: scan:security"
+
+          echo "All tests passed."
+
   - name: tasks
     description: Dry run all tasks in the base tasks file
     actions:
@@ -126,5 +198,205 @@ tasks:
           # Loop through each command and execute with --dry-run
           for task in $tasks; do
             printf "\n\033[0;36mChecking '\033[1;33m%s\033[0;36m' with --dry-run\033[0m\n" "$task"
-            ./uds run "$task" --dry-run
+            uds run "$task" --dry-run
           done
+
+  - name: scan-and-vouch
+    description: Run security scans and vouch for the Zarf package
+    inputs:
+      gitleaks_scan_path:
+        description: Directory for Gitleaks to scan
+        default: .
+      opengrep_scan_path:
+        description: Path to scan with OpenGrep
+        default: .
+      run_opengrep:
+        description: Whether to run OpenGrep SAST. Set to 'false' to skip.
+        default: "true"
+      witness_key_path:
+        description: Path to a local signing key for Witness. Use for local runs when enable_sigstore=false. Leave empty in CI (Sigstore is used instead).
+        default: ""
+      witness_workingdir:
+        description: Directory for Witness to run attested commands from.
+        default: ""
+      github_token:
+        description: GitHub token for OLM CLI installation from GHCR. Pass secrets.GITHUB_TOKEN in CI. Leave empty locally.
+        default: ""
+      olm_cat:
+        description: Domain of the CAT instance
+        default: ""
+      olm_org:
+        description: OLM organization name
+        default: ""
+      zarf_path:
+        description: Path to the directory containing zarf.yaml
+        default: .
+      architecture:
+        description: Target architecture for the Zarf package
+        default: amd64
+      flavor:
+        description: Flavor for the Zarf package build
+        default: upstream
+      test_directory:
+        description: Path to the test directory to pass to olm vouch. Leave empty to skip.
+        default: tests
+      extra_attestations:
+        description: Comma-separated list of additional witness JSON attestation files to include in vouch
+        default: ""
+      enable_sigstore:
+        description: Sign attestations with Sigstore/Fulcio. Requires OIDC token (e.g. GitHub Actions).
+        default: "true"
+      enable_archivista:
+        description: Upload attestations to Archivista.
+        default: "false"
+    actions:
+      - description: Run security scans then vouch for Zarf package
+        shell:
+          linux: bash
+          darwin: bash
+        cmd: |
+          set -euo pipefail
+          export PATH="$HOME/.local/bin:$PATH"
+
+          EXTRA_ATTESTATIONS="${{ .inputs.extra_attestations }}"
+          WITNESS_KEY_PATH="${{ .inputs.witness_key_path }}"
+          WITNESS_WORKINGDIR="${{ .inputs.witness_workingdir }}"
+
+          uds run scan:security \
+            --with gitleaks_scan_path="${{ .inputs.gitleaks_scan_path }}" \
+            --with opengrep_scan_path="${{ .inputs.opengrep_scan_path }}" \
+            --with run_opengrep="${{ .inputs.run_opengrep }}" \
+            --with witness_key_path="$WITNESS_KEY_PATH" \
+            --with witness_workingdir="$WITNESS_WORKINGDIR" \
+            --with enable_sigstore="${{ .inputs.enable_sigstore }}" \
+            --with enable_archivista="${{ .inputs.enable_archivista }}"
+
+          SARIF_FILE_LIST=()
+          SCAN_ATTESTATION_LIST=()
+          if [ -s gitleaks.sarif.json ]; then
+            SARIF_FILE_LIST+=(gitleaks.sarif.json)
+          fi
+          if [ -s gitleaks-witness.json ]; then
+            SCAN_ATTESTATION_LIST+=(gitleaks-witness.json)
+          fi
+          if [ "${{ .inputs.run_opengrep }}" = "true" ]; then
+            if [ -s opengrep.sarif.json ]; then
+              SARIF_FILE_LIST+=(opengrep.sarif.json)
+            fi
+            if [ -s opengrep-witness.json ]; then
+              SCAN_ATTESTATION_LIST+=(opengrep-witness.json)
+            fi
+          fi
+
+          SARIF_FILES=$(IFS=,; echo "${SARIF_FILE_LIST[*]}")
+          ALL_EXTRA=$(IFS=,; echo "${SCAN_ATTESTATION_LIST[*]}")
+          if [ -n "$EXTRA_ATTESTATIONS" ]; then
+            if [ -n "$ALL_EXTRA" ]; then
+              ALL_EXTRA="${ALL_EXTRA},$EXTRA_ATTESTATIONS"
+            else
+              ALL_EXTRA="$EXTRA_ATTESTATIONS"
+            fi
+          fi
+
+          uds run vouch:package \
+            --with zarf_path="${{ .inputs.zarf_path }}" \
+            --with architecture="${{ .inputs.architecture }}" \
+            --with flavor="${{ .inputs.flavor }}" \
+            --with test_directory="${{ .inputs.test_directory }}" \
+            --with github_token="${{ .inputs.github_token }}" \
+            --with olm_cat="${{ .inputs.olm_cat }}" \
+            --with olm_org="${{ .inputs.olm_org }}" \
+            --with witness_key_path="$WITNESS_KEY_PATH" \
+            --with witness_workingdir="$WITNESS_WORKINGDIR" \
+            --with attestations="${ALL_EXTRA}" \
+            --with sarif_files="${SARIF_FILES}" \
+            --with enable_sigstore="${{ .inputs.enable_sigstore }}" \
+            --with enable_archivista="${{ .inputs.enable_archivista }}"
+
+  - name: pipeline
+    description: Full local pipeline - scan, vouch, and publish
+    inputs:
+      gitleaks_scan_path:
+        description: Directory for Gitleaks to scan
+        default: .
+      opengrep_scan_path:
+        description: Path to scan with OpenGrep
+        default: .
+      run_opengrep:
+        description: Whether to run OpenGrep SAST. Set to 'false' to skip.
+        default: "true"
+      witness_key_path:
+        description: Path to a local signing key for Witness. Use for local runs when enable_sigstore=false. Leave empty in CI (Sigstore is used instead).
+        default: ""
+      witness_workingdir:
+        description: Directory for Witness to run attested commands from.
+        default: ""
+      github_token:
+        description: GitHub token for OLM CLI installation from GHCR. Pass secrets.GITHUB_TOKEN in CI. Leave empty locally.
+        default: ""
+      olm_cat:
+        description: Domain of the CAT instance
+        default: ""
+      olm_org:
+        description: OLM organization name
+        default: ""
+      registry:
+        description: OCI registry to publish to
+        default: ""
+      registry_org:
+        description: Organization path within the registry
+        default: ""
+      registry_user_id:
+        description: Registry username for publishing
+        default: ""
+      registry_password:
+        description: Registry password for publishing
+        default: ""
+      zarf_path:
+        description: Path to the directory containing zarf.yaml
+        default: .
+      architecture:
+        description: Target architecture for the Zarf package
+        default: amd64
+      flavor:
+        description: Flavor for the Zarf package build
+        default: upstream
+      test_directory:
+        description: Path to the test directory to pass to olm vouch. Leave empty to skip.
+        default: tests
+      enable_sigstore:
+        description: Sign attestations with Sigstore/Fulcio. Requires OIDC token (e.g. GitHub Actions).
+        default: "false"
+      enable_archivista:
+        description: Upload attestations to Archivista.
+        default: "false"
+    actions:
+      - description: Run full pipeline - scan, vouch, publish
+        shell:
+          linux: bash
+          darwin: bash
+        cmd: |
+          set -euo pipefail
+          export PATH="$HOME/.local/bin:$PATH"
+
+          uds run scan-and-vouch \
+            --with gitleaks_scan_path="${{ .inputs.gitleaks_scan_path }}" \
+            --with opengrep_scan_path="${{ .inputs.opengrep_scan_path }}" \
+            --with run_opengrep="${{ .inputs.run_opengrep }}" \
+            --with witness_key_path="${{ .inputs.witness_key_path }}" \
+            --with witness_workingdir="${{ .inputs.witness_workingdir }}" \
+            --with github_token="${{ .inputs.github_token }}" \
+            --with olm_cat="${{ .inputs.olm_cat }}" \
+            --with olm_org="${{ .inputs.olm_org }}" \
+            --with zarf_path="${{ .inputs.zarf_path }}" \
+            --with architecture="${{ .inputs.architecture }}" \
+            --with flavor="${{ .inputs.flavor }}" \
+            --with test_directory="${{ .inputs.test_directory }}" \
+            --with enable_sigstore="${{ .inputs.enable_sigstore }}" \
+            --with enable_archivista="${{ .inputs.enable_archivista }}"
+
+          uds run publish:zarf-package \
+            --with registry="${{ .inputs.registry }}" \
+            --with registry_org="${{ .inputs.registry_org }}" \
+            --with registry_user_id="${{ .inputs.registry_user_id }}" \
+            --with registry_password="${{ .inputs.registry_password }}"

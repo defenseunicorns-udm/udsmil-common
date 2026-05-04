@@ -27,8 +27,6 @@ jobs:
         uses: ./.github/actions/witness-run
         with:
           step: lint
-          enable-archivista: false
-          enable-sigstore: true
           command: uds run lint
           outfile: lint-witness.json
 
@@ -38,7 +36,23 @@ jobs:
           name: lint-artifacts
           path: lint-witness.json
 
-  scan-and-vouch:
+  test-tasks:
+    needs: lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: UDS CLI Setup
+        uses: ./.github/actions/uds-cli-setup
+
+      - name: Run task integration tests
+        run: uds run test
+
+  scan-vouch-publish:
     needs: lint
     runs-on: ubuntu-latest
     permissions:
@@ -53,11 +67,6 @@ jobs:
       - name: UDS CLI Setup
         uses: ./.github/actions/uds-cli-setup
 
-      - name: OLM CLI Setup
-        uses: ./.github/actions/olm-cli-setup
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Download lint artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -65,36 +74,24 @@ jobs:
           path: .
 
       - name: Security Scan
-        id: scan
-        uses: ./.github/actions/security-scan
-        with:
-          opengrep-scan-path: src/
+        run: |
+          uds run scan:security \
+            --with opengrep_scan_path=src/
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
 
       - name: Vouch
-        uses: ./.github/actions/vouch
-        with:
-          attestations: ${{ steps.scan.outputs.witness-files }},lint-witness.json
-          sarif-files: ${{ steps.scan.outputs.sarif-files }}
-          olm-catalog: ${{ secrets.OLM_CATALOG }}
-          olm-org: ${{ secrets.OLM_ORG }}
-          olm-user-id: ${{ secrets.OLM_USER_ID }}
-          olm-password: ${{ secrets.OLM_PASSWORD }}
-  publish:
-    needs: scan-and-vouch
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: UDS CLI Setup
-        uses: ./.github/actions/uds-cli-setup
-
+        run: |
+          uds run vouch:package \
+            --with github_token="${{ secrets.GITHUB_TOKEN }}" \
+            --with olm_cat="${{ secrets.OLM_CAT }}" \
+            --with olm_org="${{ secrets.OLM_ORG }}" \
+            --with attestations="gitleaks-witness.json,opengrep-witness.json,lint-witness.json" \
+            --with sarif_files="gitleaks.sarif.json,opengrep.sarif.json"
       - name: Publish
-        uses: ./.github/actions/publish
-        with:
-          registry: ${{ secrets.REGISTRY_URL }}
-          registry-org: ${{ secrets.REGISTRY_ORG }}
-          registry-user-id: ${{ secrets.REGISTRY_USER_ID }}
-          registry-password: ${{ secrets.REGISTRY_PASSWORD }}
+        run: |
+          uds run publish:zarf-package \
+            --with registry_org="${{ secrets.REGISTRY_ORG }}" \
+            --with registry_user_id="${{ secrets.REGISTRY_USER_ID }}" \
+            --with registry_password="${{ secrets.REGISTRY_PASSWORD }}"

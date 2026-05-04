@@ -41,7 +41,7 @@ inputs:
   enable-archivista:
     description: Use Archivista to store or retrieve attestations
     required: false
-    default: "true"
+    default: "false"
   enable-sigstore:
     description: Use Sigstore for attestation signing
     required: false

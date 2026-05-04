@@ -1,0 +1,155 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/defenseunicorns/maru-runner/refs/heads/main/tasks.schema.json
+
+tasks:
+
+  - name: package
+    description: Build a Zarf package with Witness attestation and vouch for it via OLM
+    inputs:
+      attestations:
+        description: Comma-separated list of additional witness JSON attestation files to include
+        default: ""
+      sarif_files:
+        description: Comma-separated list of SARIF files to include as evidence
+        default: ""
+      olm_cat:
+        description: Domain of the CAT instance
+        default: ""
+      olm_org:
+        description: OLM organization name
+        default: ""
+      olm_version:
+        description: Version of OLM CLI to install
+        # renovate: datasource=github-releases depName=defenseunicorns/uds-dot-mil extractVersion=^olm-(?<version>.+)$
+        default: 0.1.19
+      github_token:
+        description: GitHub token for GHCR authentication. Pass secrets.GITHUB_TOKEN in CI. Leave empty locally — the package is publicly accessible.
+        default: ""
+      zarf_path:
+        description: Path to the directory containing zarf.yaml
+        default: .
+      architecture:
+        description: Target architecture for the Zarf package
+        default: amd64
+      flavor:
+        description: Flavor for the Zarf package build
+        default: upstream
+      test_directory:
+        description: Path to the test directory to pass to olm vouch. Leave empty to skip.
+        default: tests
+      witness_version:
+        description: Witness version (MAJOR.MINOR.PATCH, no v prefix)
+        # renovate: datasource=github-releases depName=in-toto/witness extractVersion=^v(?<version>.+)$
+        default: 0.9.2
+      witness_key_path:
+        description: Path to a local signing key for Witness. Use for local runs when enable_sigstore=false. Leave empty in CI (Sigstore is used instead).
+        default: ""
+      witness_workingdir:
+        description: Directory for Witness to run the attested command from. Use the caller repository workspace in composite actions so the git attestor sees a real checkout.
+        default: ""
+      enable_sigstore:
+        description: Sign the attestation with Sigstore/Fulcio. Requires OIDC token (e.g. GitHub Actions).
+        default: "true"
+      enable_archivista:
+        description: Upload the attestation to Archivista.
+        default: "false"
+    actions:
+      - description: Install tools, build Zarf package, and vouch
+        shell:
+          linux: bash
+          darwin: bash
+        cmd: |
+          set -euo pipefail
+          export PATH="$HOME/.local/bin:$PATH"
+
+          ATTESTATIONS="${{ .inputs.attestations }}"
+          SARIF_FILES="${{ .inputs.sarif_files }}"
+          TEST_DIRECTORY="${{ .inputs.test_directory }}"
+          OLM_CAT="${{ .inputs.olm_cat }}"
+          OLM_ORG="${{ .inputs.olm_org }}"
+
+          uds run build:zarf-package \
+            --with zarf_path="${{ .inputs.zarf_path }}" \
+            --with architecture="${{ .inputs.architecture }}" \
+            --with flavor="${{ .inputs.flavor }}" \
+            --with witness_version="${{ .inputs.witness_version }}" \
+            --with witness_key_path="${{ .inputs.witness_key_path }}" \
+            --with witness_workingdir="${{ .inputs.witness_workingdir }}" \
+            --with enable_sigstore="${{ .inputs.enable_sigstore }}" \
+            --with enable_archivista="${{ .inputs.enable_archivista }}"
+
+          PACKAGE=$(find . -maxdepth 1 -name "zarf-package-*.tar.zst" -type f | head -n 1)
+          if [ -z "$PACKAGE" ]; then
+            echo "No zarf-package-*.tar.zst file found after build."
+            exit 1
+          fi
+          if [ -z "$OLM_CAT" ]; then
+            echo "No OLM_CAT configured. Skipping OLM vouch for local run."
+            exit 0
+          fi
+
+          uds run olm:setup \
+            --with version="${{ .inputs.olm_version }}" \
+            --with github_token="${{ .inputs.github_token }}"
+
+          ATTESTATION_FILES=()
+          if [ -s zarf-create-witness.json ]; then
+            ATTESTATION_FILES+=(zarf-create-witness.json)
+          fi
+
+          if [ -n "$ATTESTATIONS" ]; then
+            IFS=',' read -ra PROVIDED_ATTESTATIONS <<< "$ATTESTATIONS"
+            for attestation in "${PROVIDED_ATTESTATIONS[@]}"; do
+              attestation="${attestation#"${attestation%%[![:space:]]*}"}"
+              attestation="${attestation%"${attestation##*[![:space:]]}"}"
+              if [ -z "$attestation" ]; then
+                continue
+              fi
+              if [ -s "$attestation" ]; then
+                ATTESTATION_FILES+=("$attestation")
+              else
+                echo "Skipping missing attestation file: $attestation"
+              fi
+            done
+          fi
+
+          SARIF_EVIDENCE_FILES=()
+          if [ -n "$SARIF_FILES" ]; then
+            IFS=',' read -ra PROVIDED_SARIF_FILES <<< "$SARIF_FILES"
+            for sarif_file in "${PROVIDED_SARIF_FILES[@]}"; do
+              sarif_file="${sarif_file#"${sarif_file%%[![:space:]]*}"}"
+              sarif_file="${sarif_file%"${sarif_file##*[![:space:]]}"}"
+              if [ -z "$sarif_file" ]; then
+                continue
+              fi
+              if [ -s "$sarif_file" ]; then
+                SARIF_EVIDENCE_FILES+=("$sarif_file")
+              else
+                echo "Skipping missing SARIF file: $sarif_file"
+              fi
+            done
+          fi
+
+          OLM_ARGS=()
+          if [ -n "$OLM_CAT" ]; then
+            OLM_ARGS+=(--cat "$OLM_CAT")
+          fi
+          if [ -n "$OLM_ORG" ]; then
+            OLM_ARGS+=(--org "$OLM_ORG")
+          fi
+          if [ "${#SARIF_EVIDENCE_FILES[@]}" -gt 0 ]; then
+            ALL_SARIF_EVIDENCE=$(IFS=,; echo "${SARIF_EVIDENCE_FILES[*]}")
+            OLM_ARGS+=(--sarif-evidence "$ALL_SARIF_EVIDENCE")
+          fi
+          if [ -n "$TEST_DIRECTORY" ] && [ -d "$TEST_DIRECTORY" ]; then
+            OLM_ARGS+=(--test-directory "$TEST_DIRECTORY")
+          fi
+          if [ "${#ATTESTATION_FILES[@]}" -gt 0 ]; then
+            ALL_ATTESTATIONS=$(IFS=,; echo "${ATTESTATION_FILES[*]}")
+            OLM_ARGS+=(--attestations "$ALL_ATTESTATIONS")
+          else
+            echo "No Witness attestations were produced or provided; running OLM vouch without --attestations."
+          fi
+
+          ./olm vouch "$PACKAGE" \
+            "${OLM_ARGS[@]}" \
+            --log-level debug

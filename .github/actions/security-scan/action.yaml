@@ -40,47 +40,35 @@ runs:
           echo "COPIED_GITLEAKS=true" >> $GITHUB_ENV
         fi
 
-    - name: Install Cosign
-      uses: sigstore/cosign-installer@cad07c2e89fa2edd6e2d7bab4c1aa38e53f76003 # v4.1.1
-
-    - name: Install OpenGrep
-      if: ${{ inputs.run-opengrep == 'true' }}
+    - name: Security Scan
       shell: bash
       run: |
-        curl -fSL -o opengrep https://github.com/opengrep/opengrep/releases/download/${{ inputs.opengrep-version }}/opengrep_manylinux_x86
-        chmod +x opengrep
-        mkdir -p $HOME/.local/bin
-        mv opengrep $HOME/.local/bin
-        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        set -euo pipefail
+        # Navigate to the udm-common repo root so tasks.yaml is discoverable.
+        # github.action_path points to .github/actions/security-scan inside the
+        # udm-common checkout (temp dir on external runners, workspace on internal).
+        UDM_ROOT="$(realpath "${{ github.action_path }}/../../..")"
 
-    - name: Install Gitleaks
-      shell: bash
-      run: |
-        curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v${{ inputs.gitleaks-version }}/gitleaks_${{ inputs.gitleaks-version }}_linux_x64.tar.gz -o gitleaks.tar.gz
-        tar -zxf gitleaks.tar.gz
-        mkdir -p $HOME/.local/bin
-        mv gitleaks $HOME/.local/bin
-        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-        rm gitleaks.tar.gz
+        # Copy gitleaks config into the udm-common root so gitleaks finds it
+        # in CWD when the tasks run from there.
+        cp "${{ github.action_path }}/.gitleaks.toml" "$UDM_ROOT/.gitleaks.toml"
 
-    - name: Witness Run OpenGrep
-      if: ${{ inputs.run-opengrep == 'true' }}
-      uses: defenseunicorns-udm/udm-common/.github/actions/witness-run@313297d92b3b10e1d86b18c5861a3099b46b7377 # v0.6.0
-      with:
-        step: opengrep
-        enable-archivista: false
-        enable-sigstore: true
-        command: opengrep scan ${{ inputs.opengrep-scan-path }} --sarif --sarif-output opengrep.sarif.json
-        outfile: opengrep-witness.json
+        (cd "$UDM_ROOT" && uds run scan:security \
+          --with run_opengrep="${{ inputs.run-opengrep }}" \
+          --with gitleaks_scan_path="$GITHUB_WORKSPACE" \
+          --with opengrep_scan_path="$GITHUB_WORKSPACE/${{ inputs.opengrep-scan-path }}" \
+          --with witness_workingdir="$GITHUB_WORKSPACE" \
+          --with gitleaks_version="${{ inputs.gitleaks-version }}" \
+          --with opengrep_version="${{ inputs.opengrep-version }}")
 
-    - name: Witness Run Gitleaks
-      uses: defenseunicorns-udm/udm-common/.github/actions/witness-run@313297d92b3b10e1d86b18c5861a3099b46b7377 # v0.6.0
-      with:
-        step: gitleaks
-        enable-archivista: false
-        enable-sigstore: true
-        command: gitleaks dir . --report-format sarif --report-path gitleaks.sarif.json
-        outfile: gitleaks-witness.json
+        # Move attestation and SARIF output files from the udm-common working
+        # directory back to the calling repo's workspace.
+        mv "$UDM_ROOT/gitleaks-witness.json" "$GITHUB_WORKSPACE/"
+        mv "$UDM_ROOT/gitleaks.sarif.json" "$GITHUB_WORKSPACE/"
+        if [[ "${{ inputs.run-opengrep }}" == "true" ]]; then
+          mv "$UDM_ROOT/opengrep-witness.json" "$GITHUB_WORKSPACE/" 2>/dev/null || true
+          mv "$UDM_ROOT/opengrep.sarif.json" "$GITHUB_WORKSPACE/" 2>/dev/null || true
+        fi
 
     - name: Collect outputs
       id: collect-outputs

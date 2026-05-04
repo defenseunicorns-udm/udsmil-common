@@ -1,0 +1,33 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/defenseunicorns/maru-runner/refs/heads/main/tasks.schema.json
+
+tasks:
+
+  - name: setup
+    description: Authenticate with GHCR and install the OLM CLI
+    inputs:
+      version:
+        description: Version of OLM CLI to install
+        # renovate: datasource=github-releases depName=defenseunicorns/uds-dot-mil extractVersion=^olm-(?<version>.+)$
+        default: 0.1.19
+      github_token:
+        description: GitHub token for GHCR authentication. Pass secrets.GITHUB_TOKEN in CI. Leave empty locally — the package is publicly accessible.
+        default: ""
+    actions:
+      - description: Authenticate with GHCR and install OLM CLI
+        shell:
+          linux: bash
+          darwin: bash
+        cmd: |
+          set -euo pipefail
+          export PATH="$HOME/.local/bin:$PATH"
+
+          GITHUB_TOKEN_VAL=${{ .inputs.github_token }}
+          if [ -n "$GITHUB_TOKEN_VAL" ]; then
+            uds zarf tools registry login -u token -p "$GITHUB_TOKEN_VAL" ghcr.io
+          fi
+
+          uds zarf package deploy \
+            "oci://ghcr.io/defenseunicorns-udm/olm-installer:${{ .inputs.version }}-linux" \
+            -a amd64 --confirm
+
+          chmod +x olm

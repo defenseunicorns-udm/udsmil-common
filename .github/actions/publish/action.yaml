@@ -4,7 +4,8 @@ description: Publishes a vouched Zarf package to an OCI registry.
 inputs:
   registry:
     description: OCI registry to publish to (e.g. registry.uds-mil.us)
-    required: true
+    required: false
+    default: registry.uds-mil.us
   registry-org:
     description: Organization path within the registry (e.g. uds-army-demo)
     required: true
@@ -14,27 +15,23 @@ inputs:
   registry-password:
     description: Registry password for publishing
     required: true
-  artifact-name:
-    description: Name of the Zarf package artifact to download. Must match the artifact-name used in the security-scan action.
-    required: false
-    default: zarf-package
 
 runs:
   using: composite
   steps:
 
-    - name: Download Zarf package artifact
-      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-      with:
-        name: ${{ inputs.artifact-name }}
-        path: .
-
     - name: Publish Zarf Package
       shell: bash
       run: |
-        uds zarf tools registry login \
-          -u ${{ inputs.registry-user-id }} \
-          -p ${{ inputs.registry-password }} \
-          ${{ inputs.registry }}
-        uds zarf package publish zarf-package-*.tar.zst \
-          oci://${{ inputs.registry }}/${{ inputs.registry-org }}
+        set -euo pipefail
+        # Navigate to the udm-common repo root so tasks.yaml is discoverable.
+        UDM_ROOT="$(realpath "${{ github.action_path }}/../../..")"
+
+        # Copy the package to the udm-common root so the publish task can find it.
+        cp zarf-package-*.tar.zst "$UDM_ROOT/"
+
+        (cd "$UDM_ROOT" && uds run publish:zarf-package \
+          --with registry="${{ inputs.registry }}" \
+          --with registry_org="${{ inputs.registry-org }}" \
+          --with registry_user_id="${{ inputs.registry-user-id }}" \
+          --with registry_password="${{ inputs.registry-password }}")

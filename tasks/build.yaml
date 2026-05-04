@@ -1,0 +1,91 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/defenseunicorns/maru-runner/refs/heads/main/tasks.schema.json
+
+tasks:
+
+  - name: zarf-package
+    description: Build a Zarf package with Witness attestation
+    inputs:
+      zarf_path:
+        description: Path to the directory containing zarf.yaml
+        default: .
+      architecture:
+        description: Target architecture for the Zarf package
+        default: amd64
+      flavor:
+        description: Flavor for the Zarf package build
+        default: upstream
+      witness_version:
+        description: Witness version (MAJOR.MINOR.PATCH, no v prefix)
+        # renovate: datasource=github-releases depName=in-toto/witness extractVersion=^v(?<version>.+)$
+        default: 0.9.2
+      witness_key_path:
+        description: Path to a local signing key for Witness. Use for local runs when enable_sigstore=false. Leave empty in CI (Sigstore is used instead).
+        default: ""
+      witness_workingdir:
+        description: Directory for Witness to run the attested command from. Use the caller repository workspace in composite actions so the git attestor sees a real checkout.
+        default: ""
+      enable_sigstore:
+        description: Sign the attestation with Sigstore/Fulcio. Requires OIDC token (e.g. GitHub Actions).
+        default: "true"
+      enable_archivista:
+        description: Upload the attestation to Archivista.
+        default: "false"
+    actions:
+      - description: Install Witness and build Zarf package with attestation
+        shell:
+          linux: bash
+          darwin: bash
+        cmd: |
+          set -euo pipefail
+          export PATH="$HOME/.local/bin:$PATH"
+
+          ZARF_PATH="${{ .inputs.zarf_path }}"
+          ARCHITECTURE="${{ .inputs.architecture }}"
+          FLAVOR="${{ .inputs.flavor }}"
+          WITNESS_KEY_PATH="${{ .inputs.witness_key_path }}"
+          WITNESS_WORKINGDIR="${{ .inputs.witness_workingdir }}"
+          ENABLE_SIGSTORE="${{ .inputs.enable_sigstore }}"
+          ENABLE_ARCHIVISTA="${{ .inputs.enable_archivista }}"
+          OUTPUT_DIR="$(pwd)"
+          ZARF_CREATE_WITNESS="${OUTPUT_DIR}/zarf-create-witness.json"
+
+          ZARF_CMD=(
+            uds zarf package create "$ZARF_PATH"
+            --confirm
+            --no-progress
+            --architecture="$ARCHITECTURE"
+            --flavor "$FLAVOR"
+            --output "$OUTPUT_DIR"
+          )
+          rm -f "$ZARF_CREATE_WITNESS"
+
+          SHOULD_WITNESS="false"
+          WITNESS_ARGS=(-a=environment -a=git)
+          if [ "$ENABLE_SIGSTORE" = "true" ]; then
+            SHOULD_WITNESS="true"
+            WITNESS_ARGS+=(
+              --signer-fulcio-url=https://fulcio.sigstore.dev
+              --signer-fulcio-oidc-client-id=sigstore
+              --signer-fulcio-oidc-issuer=https://oauth2.sigstore.dev/auth
+              --timestamp-servers=https://timestamp.sigstore.dev/api/v1/timestamp
+            )
+          elif [ -n "$WITNESS_KEY_PATH" ]; then
+            SHOULD_WITNESS="true"
+            if [ ! -f "$WITNESS_KEY_PATH" ]; then
+              echo "Witness key file does not exist: $WITNESS_KEY_PATH"
+              exit 1
+            fi
+            WITNESS_ARGS+=(--signer-file-key-path "$WITNESS_KEY_PATH")
+          fi
+          if [ -n "$WITNESS_WORKINGDIR" ]; then
+            WITNESS_ARGS+=(--workingdir "$WITNESS_WORKINGDIR")
+          fi
+
+          if [ "$SHOULD_WITNESS" = "true" ]; then
+            uds run setup:witness --with version="${{ .inputs.witness_version }}"
+            WITNESS_ARGS+=(--enable-archivista="$ENABLE_ARCHIVISTA")
+            witness run "${WITNESS_ARGS[@]}" -s=zarf-create --outfile="$ZARF_CREATE_WITNESS" -- "${ZARF_CMD[@]}"
+          else
+            echo "No signing key or Sigstore enabled. Building Zarf package without Witness attestation."
+            "${ZARF_CMD[@]}"
+          fi

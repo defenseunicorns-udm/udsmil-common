@@ -10,17 +10,15 @@ inputs:
     description: Comma-separated list of SARIF files to include as evidence (e.g. outputs from security-scan plus any external SARIF files)
     required: false
     default: ""
-  olm-catalog:
-    description: OLM catalog hostname
+  github-token:
+    description: GitHub token for OLM CLI installation from GHCR. Recommended in CI to avoid rate limits (pass secrets.GITHUB_TOKEN). Optional for local use.
+    required: false
+    default: ""
+  olm-cat:
+    description: Domain of the CAT instance
     required: true
   olm-org:
     description: OLM organization name
-    required: true
-  olm-user-id:
-    description: OLM registry username
-    required: true
-  olm-password:
-    description: OLM registry password
     required: true
   zarf-architecture:
     description: Target architecture for the Zarf package
@@ -34,10 +32,6 @@ inputs:
     description: Path to the directory containing zarf.yaml. Use a subdirectory path for monorepos (e.g. 'services/api').
     required: false
     default: .
-  artifact-name:
-    description: Name for the uploaded Zarf package artifact. Use unique names when building multiple packages in a matrix.
-    required: false
-    default: zarf-package
   test-directory:
     description: Path to the test directory to pass to olm vouch. Leave empty to skip the --test-directory flag entirely.
     required: false
@@ -58,53 +52,48 @@ runs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
 
-    - name: Witness Build Zarf Package
-      uses: defenseunicorns-udm/udm-common/.github/actions/witness-run@313297d92b3b10e1d86b18c5861a3099b46b7377 # v0.6.0
-      with:
-        step: zarf-create
-        enable-archivista: false
-        enable-sigstore: true
-        command: uds zarf package create ${{ inputs.zarf-path }} --confirm --no-progress --architecture="${{ inputs.zarf-architecture }}" --flavor "${{ inputs.zarf-flavor }}"
-        outfile: zarf-create-witness.json
+    - name: Vouch
+      shell: bash
+      run: |
+        set -euo pipefail
+        # Navigate to the udm-common repo root so tasks.yaml is discoverable.
+        UDM_ROOT="$(realpath "${{ github.action_path }}/../../..")"
+
+        ZARF_PATH="${GITHUB_WORKSPACE}"
+        if [[ "${{ inputs.zarf-path }}" != "." ]]; then
+          ZARF_PATH="${GITHUB_WORKSPACE}/${{ inputs.zarf-path }}"
+        fi
+
+        TEST_DIR=""
+        if [[ -n "${{ inputs.test-directory }}" ]]; then
+          TEST_DIR="${GITHUB_WORKSPACE}/${{ inputs.test-directory }}"
+        fi
+
+        (cd "$UDM_ROOT" && uds run vouch:package \
+          --with github_token="${{ inputs.github-token }}" \
+          --with olm_cat="${{ inputs.olm-cat }}" \
+          --with olm_org="${{ inputs.olm-org }}" \
+          --with attestations="${{ inputs.attestations }}" \
+          --with sarif_files="${{ inputs.sarif-files }}" \
+          --with test_directory="$TEST_DIR" \
+          --with witness_workingdir="$GITHUB_WORKSPACE" \
+          --with zarf_path="$ZARF_PATH" \
+          --with architecture="${{ inputs.zarf-architecture }}" \
+          --with flavor="${{ inputs.zarf-flavor }}")
+
+        mv "$UDM_ROOT"/zarf-package-*.tar.zst "$GITHUB_WORKSPACE/"
+        if [[ -f "$UDM_ROOT/zarf-create-witness.json" ]]; then
+          mv "$UDM_ROOT/zarf-create-witness.json" "$GITHUB_WORKSPACE/"
+        fi
 
     - name: Find Zarf package
       id: find-package
       shell: bash
       run: |
-        PACKAGE=$(ls zarf-package-*.tar.zst | head -n 1)
-        echo "zarf-package=${PACKAGE}" >> "$GITHUB_OUTPUT"
-
-    - name: Vouch for Zarf Package
-      shell: bash
-      env:
-        OLM_CAT: ${{ inputs.olm-catalog }}
-        OLM_ORG: ${{ inputs.olm-org }}
-      run: |
-        ALL_ATTESTATIONS="zarf-create-witness.json"
-        if [[ -n "${{ inputs.attestations }}" ]]; then
-          ALL_ATTESTATIONS="${ALL_ATTESTATIONS},${{ inputs.attestations }}"
+        set -euo pipefail
+        PACKAGE="$(find "$GITHUB_WORKSPACE" -maxdepth 1 -name "zarf-package-*.tar.zst" -type f | head -n 1)"
+        if [[ -z "$PACKAGE" ]]; then
+          echo "No zarf-package-*.tar.zst file found after vouch."
+          exit 1
         fi
-
-        TEST_DIR_FLAG=""
-        if [[ -n "${{ inputs.test-directory }}" && -d "${{ inputs.test-directory }}" ]]; then
-          TEST_DIR_FLAG="--test-directory ${{ inputs.test-directory }}"
-        fi
-
-        SARIF_FLAG=""
-        if [[ -n "${{ inputs.sarif-files }}" ]]; then
-          SARIF_FLAG="--sarif-evidence ${{ inputs.sarif-files }}"
-        fi
-
-        ./olm vouch ${{ steps.find-package.outputs.zarf-package }} \
-          --cat "$OLM_CAT" \
-          --org "$OLM_ORG" \
-          $SARIF_FLAG \
-          --log-level debug \
-          $TEST_DIR_FLAG \
-          --attestations ${ALL_ATTESTATIONS}
-
-    - name: Upload Zarf package artifact
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-      with:
-        name: ${{ inputs.artifact-name }}
-        path: zarf-package-*.tar.zst
+        echo "zarf-package=$(basename "$PACKAGE")" >> "$GITHUB_OUTPUT"
