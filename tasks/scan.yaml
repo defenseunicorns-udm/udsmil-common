@@ -71,10 +71,7 @@ tasks:
         default: ""
       enable_sigstore:
         description: Sign the attestation with Sigstore/Fulcio.
-        default: "false"
-      enable_archivista:
-        description: Upload the attestation to Archivista.
-        default: "false"
+        default: "true"
     actions:
       - description: Install tools and run attested Gitleaks scan
         shell:
@@ -123,7 +120,6 @@ tasks:
 
           if [ "$SHOULD_WITNESS" = "true" ]; then
             uds run setup:witness --with version="${{ .inputs.witness_version }}"
-            WITNESS_ARGS+=(--enable-archivista=${{ .inputs.enable_archivista }})
             witness run "${WITNESS_ARGS[@]}" -s=gitleaks --outfile="$GITLEAKS_WITNESS" -- "${GITLEAKS_CMD[@]}"
           else
             echo "No signing key or Sigstore enabled. Running Gitleaks without Witness attestation."
@@ -150,9 +146,6 @@ tasks:
         default: ""
       enable_sigstore:
         description: Sign the attestation with Sigstore/Fulcio.
-        default: "false"
-      enable_archivista:
-        description: Upload the attestation to Archivista.
         default: "false"
     actions:
       - description: Install tools and run attested OpenGrep scan
@@ -209,7 +202,6 @@ tasks:
 
           if [ "$SHOULD_WITNESS" = "true" ]; then
             uds run setup:witness --with version="${{ .inputs.witness_version }}"
-            WITNESS_ARGS+=(--enable-archivista=${{ .inputs.enable_archivista }})
             witness run "${WITNESS_ARGS[@]}" -s=opengrep --outfile="$OPENGREP_WITNESS" -- "${OPENGREP_CMD[@]}"
           else
             echo "No signing key or Sigstore enabled. Running OpenGrep without Witness attestation."
@@ -258,7 +250,6 @@ tasks:
           WITNESS_KEY_PATH="${{ .inputs.witness_key_path }}"
           WITNESS_WORKINGDIR="${{ .inputs.witness_workingdir }}"
           ENABLE_SIGSTORE="${{ .inputs.enable_sigstore }}"
-          ENABLE_ARCHIVISTA="${{ .inputs.enable_archivista }}"
           RUN_OPENGREP="${{ .inputs.run_opengrep }}"
 
           GITLEAKS_OPTS=(
@@ -266,7 +257,6 @@ tasks:
             --with gitleaks_scan_path="$GITLEAKS_SCAN_PATH"
             --with witness_version="$WITNESS_VERSION"
             --with enable_sigstore="$ENABLE_SIGSTORE"
-            --with enable_archivista="$ENABLE_ARCHIVISTA"
           )
           [ -n "$WITNESS_KEY_PATH" ] && GITLEAKS_OPTS+=(--with witness_key_path="$WITNESS_KEY_PATH")
           [ -n "$WITNESS_WORKINGDIR" ] && GITLEAKS_OPTS+=(--with witness_workingdir="$WITNESS_WORKINGDIR")
@@ -279,7 +269,6 @@ tasks:
               --with opengrep_scan_path="$OPENGREP_SCAN_PATH"
               --with witness_version="$WITNESS_VERSION"
               --with enable_sigstore="$ENABLE_SIGSTORE"
-              --with enable_archivista="$ENABLE_ARCHIVISTA"
             )
             [ -n "$WITNESS_KEY_PATH" ] && OPENGREP_OPTS+=(--with witness_key_path="$WITNESS_KEY_PATH")
             [ -n "$WITNESS_WORKINGDIR" ] && OPENGREP_OPTS+=(--with witness_workingdir="$WITNESS_WORKINGDIR")
