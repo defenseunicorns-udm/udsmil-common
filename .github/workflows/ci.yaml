@@ -90,12 +90,6 @@ jobs:
             --with attestations="gitleaks-witness.json,opengrep-witness.json,lint-witness.json" \
             --with sarif_files="gitleaks.sarif.json,opengrep.sarif.json"
 
-      - name: Upload Zarf package artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: zarf-package
-          path: zarf-package-*.tar.zst
-
   publish:
     needs: scan-and-vouch
     runs-on: ubuntu-latest

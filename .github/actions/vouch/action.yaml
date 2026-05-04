@@ -32,10 +32,6 @@ inputs:
     description: Path to the directory containing zarf.yaml. Use a subdirectory path for monorepos (e.g. 'services/api').
     required: false
     default: .
-  artifact-name:
-    description: Name for the uploaded Zarf package artifact. Use unique names when building multiple packages in a matrix.
-    required: false
-    default: zarf-package
   test-directory:
     description: Path to the test directory to pass to olm vouch. Leave empty to skip the --test-directory flag entirely.
     required: false
@@ -89,16 +85,3 @@ runs:
         if [[ -f "$UDM_ROOT/zarf-create-witness.json" ]]; then
           mv "$UDM_ROOT/zarf-create-witness.json" "$GITHUB_WORKSPACE/"
         fi
-
-    - name: Find Zarf package
-      id: find-package
-      shell: bash
-      run: |
-        PACKAGE=$(ls zarf-package-*.tar.zst | head -n 1)
-        echo "zarf-package=${PACKAGE}" >> "$GITHUB_OUTPUT"
-
-    - name: Upload Zarf package artifact
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-      with:
-        name: ${{ inputs.artifact-name }}
-        path: zarf-package-*.tar.zst
