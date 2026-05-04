@@ -85,3 +85,15 @@ runs:
         if [[ -f "$UDM_ROOT/zarf-create-witness.json" ]]; then
           mv "$UDM_ROOT/zarf-create-witness.json" "$GITHUB_WORKSPACE/"
         fi
+
+    - name: Find Zarf package
+      id: find-package
+      shell: bash
+      run: |
+        set -euo pipefail
+        PACKAGE="$(find "$GITHUB_WORKSPACE" -maxdepth 1 -name "zarf-package-*.tar.zst" -type f | head -n 1)"
+        if [[ -z "$PACKAGE" ]]; then
+          echo "No zarf-package-*.tar.zst file found after vouch."
+          exit 1
+        fi
+        echo "zarf-package=$(basename "$PACKAGE")" >> "$GITHUB_OUTPUT"

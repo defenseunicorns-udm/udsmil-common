@@ -52,7 +52,7 @@ jobs:
       - name: Run task integration tests
         run: uds run test
 
-  scan-and-vouch:
+  scan-vouch-publish:
     needs: lint
     runs-on: ubuntu-latest
     permissions:
@@ -89,25 +89,6 @@ jobs:
             --with olm_org="${{ secrets.OLM_ORG }}" \
             --with attestations="gitleaks-witness.json,opengrep-witness.json,lint-witness.json" \
             --with sarif_files="gitleaks.sarif.json,opengrep.sarif.json"
-
-  publish:
-    needs: scan-and-vouch
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: UDS CLI Setup
-        uses: ./.github/actions/uds-cli-setup
-
-      - name: Download Zarf package artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: zarf-package
-          path: .
-
       - name: Publish
         run: |
           uds run publish:zarf-package \

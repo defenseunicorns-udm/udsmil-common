@@ -45,7 +45,7 @@ jobs:
           name: lint-artifacts
           path: lint-witness.json
 
-  scan-and-vouch:
+  scan-vouch-publish:
     needs: lint
     runs-on: ubuntu-latest
     permissions:
@@ -69,14 +69,6 @@ jobs:
           olm-org: <your-org-name>
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-  publish:
-    needs: scan-and-vouch
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v6.0.2
-      - uses: defenseunicorns-udm/udm-common/.github/actions/uds-cli-setup@313297d92b3b10e1d86b18c5861a3099b46b7377 # v0.6.0
       - uses: defenseunicorns-udm/udm-common/.github/actions/publish@313297d92b3b10e1d86b18c5861a3099b46b7377 # v0.6.0
         with:
           registry-org: <your-org-name>
@@ -86,11 +78,11 @@ jobs:
 
 ### Monorepo
 
-Use `zarf-path` and `artifact-name` to build multiple services in a matrix:
+Use `zarf-path` to build and publish multiple services in a matrix:
 
 ```yaml
 jobs:
-  scan-and-vouch:
+  scan-vouch-publish:
     strategy:
       matrix:
         service: [api, worker, frontend]
@@ -104,10 +96,14 @@ jobs:
           attestations: "${{ steps.scan.outputs.witness-files }}"
           sarif-files: "${{ steps.scan.outputs.sarif-files }}"
           zarf-path: services/${{ matrix.service }}
-          artifact-name: zarf-package-${{ matrix.service }}
           olm-cat: cat-api.uds-mil.us
           olm-org: <your-org-name>
           github-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: defenseunicorns-udm/udm-common/.github/actions/publish@313297d92b3b10e1d86b18c5861a3099b46b7377 # v0.6.0
+        with:
+          registry-org: <your-org-name>
+          registry-user-id: ${{ secrets.REGISTRY_USER_ID }}
+          registry-password: ${{ secrets.REGISTRY_PASSWORD }}
 ```
 
 ## Required Secrets

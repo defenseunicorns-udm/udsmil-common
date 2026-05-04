@@ -21,12 +21,12 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: UDS CLI Setup
-        uses: defenseunicorns-udm/udm-common/.github/actions/uds-cli-setup@9cb4474bf099d2a5f054bc2c88c97c1c715f9960 # v0.5.1
+        uses: defenseunicorns-udm/udm-common/.github/actions/uds-cli-setup@313297d92b3b10e1d86b18c5861a3099b46b7377 # v0.6.0
 
       # Lint logic is owned by the calling repo via a UDS task.
       # Define a 'lint' task in your tasks.yaml that runs your linter(s).
       - name: Witness Run Lint
-        uses: defenseunicorns-udm/udm-common/.github/actions/witness-run@9cb4474bf099d2a5f054bc2c88c97c1c715f9960 # v0.5.1
+        uses: defenseunicorns-udm/udm-common/.github/actions/witness-run@313297d92b3b10e1d86b18c5861a3099b46b7377 # v0.6.0
         with:
           step: lint
           command: uds run lint
@@ -38,7 +38,7 @@ jobs:
           name: lint-artifacts
           path: lint-witness.json
 
-  scan-and-vouch:
+  scan-vouch-publish:
     needs: lint
     runs-on: ubuntu-latest
     permissions:
@@ -50,7 +50,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: UDS CLI Setup
-        uses: defenseunicorns-udm/udm-common/.github/actions/uds-cli-setup@9cb4474bf099d2a5f054bc2c88c97c1c715f9960 # v0.5.1
+        uses: defenseunicorns-udm/udm-common/.github/actions/uds-cli-setup@313297d92b3b10e1d86b18c5861a3099b46b7377 # v0.6.0
 
       - name: Download lint artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -60,10 +60,10 @@ jobs:
 
       - name: Security Scan
         id: scan
-        uses: defenseunicorns-udm/udm-common/.github/actions/security-scan@9cb4474bf099d2a5f054bc2c88c97c1c715f9960 # v0.5.1
+        uses: defenseunicorns-udm/udm-common/.github/actions/security-scan@313297d92b3b10e1d86b18c5861a3099b46b7377 # v0.6.0
 
       - name: Vouch
-        uses: defenseunicorns-udm/udm-common/.github/actions/vouch@9cb4474bf099d2a5f054bc2c88c97c1c715f9960 # v0.5.1
+        uses: defenseunicorns-udm/udm-common/.github/actions/vouch@313297d92b3b10e1d86b18c5861a3099b46b7377 # v0.6.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           attestations: ${{ steps.scan.outputs.witness-files }},lint-witness.json
@@ -71,20 +71,8 @@ jobs:
           olm-cat: cat-api.uds-mil.us
           olm-org: <your-org-name>
 
-  publish:
-    needs: scan-and-vouch
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: UDS CLI Setup
-        uses: defenseunicorns-udm/udm-common/.github/actions/uds-cli-setup@9cb4474bf099d2a5f054bc2c88c97c1c715f9960 # v0.5.1
-
       - name: Publish
-        uses: defenseunicorns-udm/udm-common/.github/actions/publish@9cb4474bf099d2a5f054bc2c88c97c1c715f9960 # v0.5.1
+        uses: defenseunicorns-udm/udm-common/.github/actions/publish@313297d92b3b10e1d86b18c5861a3099b46b7377 # v0.6.0
         with:
           registry-org: <your-org-name>
           registry-user-id: ${{ secrets.REGISTRY_USER_ID }}
